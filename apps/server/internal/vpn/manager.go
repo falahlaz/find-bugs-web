@@ -457,3 +457,52 @@ func (m *Manager) Logs() []string {
 	}
 	return lines
 }
+
+// SAMLPage returns the captured login page when GlobalProtect wrote a local
+// SAML HTML file (~/GP_HTML/*.html, an auto-submitting POST form to the IdP)
+// instead of an https URL.
+func (m *Manager) SAMLPage() ([]byte, bool) {
+	_, url := m.LoginURL()
+	if !isSAMLFile(url) {
+		return nil, false
+	}
+	b, err := os.ReadFile(url)
+	return b, err == nil
+}
+
+// LoginLink returns the link to show the user: "/saml-login" for a local
+// SAML file, the captured https URL otherwise, or "" if none yet.
+func (m *Manager) LoginLink() (State, string) {
+	st, url := m.LoginURL()
+	switch {
+	case isSAMLFile(url):
+		return st, "/saml-login"
+	case strings.HasPrefix(url, "https://"):
+		return st, url
+	}
+	return st, ""
+}
+
+func isSAMLFile(v string) bool {
+	home, err := os.UserHomeDir()
+	if err != nil || !filepath.IsAbs(v) {
+		return false
+	}
+	return filepath.Dir(filepath.Clean(v)) == filepath.Join(home, "GP_HTML") && strings.HasSuffix(v, ".html")
+}
+
+// Snapshot returns who is connecting, who connected and when, without
+// running the CLI (cheap enough for every status poll).
+func (m *Manager) Snapshot() (operator, connectedBy string, connectedAt *time.Time) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	switch m.state {
+	case StateConnecting, StateWaitingCallback, StateSubmitting:
+		operator = m.operator
+	}
+	if !m.connectedAt.IsZero() {
+		at := m.connectedAt
+		connectedBy, connectedAt = m.connectedBy, &at
+	}
+	return operator, connectedBy, connectedAt
+}

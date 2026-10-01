@@ -42,7 +42,11 @@ type rec struct {
 	keys []string
 }
 
-func (r *rec) Notify(_ context.Context, key, _ string) { r.mu.Lock(); r.keys = append(r.keys, key); r.mu.Unlock() }
+func (r *rec) Notify(_ context.Context, key, _ string) {
+	r.mu.Lock()
+	r.keys = append(r.keys, key)
+	r.mu.Unlock()
+}
 
 func TestVPNTransitions(t *testing.T) {
 	v, n := &fakeVPN{}, &rec{}

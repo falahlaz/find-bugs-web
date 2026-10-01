@@ -38,11 +38,11 @@ type Monitor interface {
 
 // Config tunes the worker.
 type Config struct {
-	WaitingExpiry   time.Duration // WAITING_* jobs expire after this
-	RecheckAfter    time.Duration // re-check VPN/Splunk if a job runs longer
-	JobTimeout      time.Duration // hard limit per job
-	IdlePoll        time.Duration // how often to look for work when idle
-	PublicURL       string
+	WaitingExpiry time.Duration // WAITING_* jobs expire after this
+	RecheckAfter  time.Duration // re-check VPN/Splunk if a job runs longer
+	JobTimeout    time.Duration // hard limit per job
+	IdlePoll      time.Duration // how often to look for work when idle
+	PublicURL     string
 }
 
 // Worker processes jobs.
