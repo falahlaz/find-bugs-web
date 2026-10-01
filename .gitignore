@@ -1,0 +1,20 @@
+# Runtime data and secrets
+data/
+*.db
+*.db-wal
+*.db-shm
+.env
+splunk_api_session.json
+splunk_session.json
+
+# Build output
+/bin/
+apps/server/web/dist/
+apps/web/dist/
+node_modules/
+
+# Python
+__pycache__/
+.venv/
+venv/
+scripts/splunk-login/evidences/

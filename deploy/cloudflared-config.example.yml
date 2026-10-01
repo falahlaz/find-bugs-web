@@ -1,0 +1,9 @@
+# ~/.cloudflared/config.yml — Cloudflare Tunnel to the local server.
+# cloudflared tunnel create findbugs
+# cloudflared tunnel route dns findbugs findbugs.arunoir.space
+tunnel: findbugs
+credentials-file: /home/<user>/.cloudflared/<tunnel-id>.json
+ingress:
+  - hostname: findbugs.arunoir.space
+    service: http://127.0.0.1:8080
+  - service: http_status:404

@@ -1,0 +1,8 @@
+# Daily SQLite backup (online, consistent). Enable with findbugs-backup.timer.
+[Unit]
+Description=Find Bugs Web SQLite backup
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/findbugs
+ExecStart=%h/findbugs/deploy/backup.sh

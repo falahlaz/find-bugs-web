@@ -1,0 +1,28 @@
+# systemd *user* unit for Find Bugs Web. Install as the Linux user that owns
+# the GlobalProtect session (not root):
+#   sudo loginctl enable-linger "$USER"
+#   cp deploy/findbugs.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload && systemctl --user enable --now findbugs
+# A user unit inherits XDG_RUNTIME_DIR/DBUS_SESSION_BUS_ADDRESS, which the
+# GlobalProtect CLI needs, and keeps running without an SSH session.
+[Unit]
+Description=Find Bugs Web
+After=network-online.target
+
+[Service]
+WorkingDirectory=%h/findbugs
+ExecStart=%h/findbugs/bin/findbugs serve
+# Secrets and settings (chmod 600). See .env.example.
+EnvironmentFile=%h/.config/findbugs/findbugs.env
+# gpshow.sh only calls xdg-open when $DISPLAY contains ":" (no X server needed).
+# Xvfb for the Splunk login uses its own display via xvfb-run -a.
+Environment=DISPLAY=:0
+Environment=BROWSER=%h/.gp-web/capture-url.sh
+Restart=on-failure
+RestartSec=3
+# Logs go to journald: journalctl --user -u findbugs -f
+UMask=0077
+NoNewPrivileges=true
+
+[Install]
+WantedBy=default.target

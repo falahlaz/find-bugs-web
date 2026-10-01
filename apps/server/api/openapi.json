@@ -1,0 +1,1931 @@
+{
+  "components": {
+    "schemas": {
+      "AuditEntry": {
+        "properties": {
+          "action": {
+            "type": "string"
+          },
+          "at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "result": {
+            "type": "string"
+          },
+          "userId": {
+            "format": "int64",
+            "nullable": true,
+            "type": "integer"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "action",
+          "at",
+          "id",
+          "result"
+        ],
+        "type": "object"
+      },
+      "AuditListResponse": {
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/AuditEntry"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "entries"
+        ],
+        "type": "object"
+      },
+      "Banner": {
+        "properties": {
+          "action": {
+            "enum": [
+              "vpn",
+              "splunk"
+            ],
+            "type": "string"
+          },
+          "level": {
+            "enum": [
+              "info",
+              "warning",
+              "error"
+            ],
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "level",
+          "message"
+        ],
+        "type": "object"
+      },
+      "CallbackRequest": {
+        "properties": {
+          "uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "uri"
+        ],
+        "type": "object"
+      },
+      "CallbackResult": {
+        "properties": {
+          "exitCode": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "IDLE",
+              "CONNECTING",
+              "WAITING_CALLBACK",
+              "SUBMITTING",
+              "CONNECTED",
+              "FAILED"
+            ],
+            "type": "string"
+          },
+          "stderr": {
+            "type": "string"
+          },
+          "stdout": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "exitCode",
+          "state",
+          "stderr",
+          "stdout"
+        ],
+        "type": "object"
+      },
+      "CmdResult": {
+        "properties": {
+          "exitCode": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "stderr": {
+            "type": "string"
+          },
+          "stdout": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "exitCode",
+          "stderr",
+          "stdout"
+        ],
+        "type": "object"
+      },
+      "CreateUserRequest": {
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "qa",
+              "engineer"
+            ],
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "password",
+          "role",
+          "username"
+        ],
+        "type": "object"
+      },
+      "EnvironmentsResponse": {
+        "properties": {
+          "defaultTimeRange": {
+            "type": "string"
+          },
+          "environments": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "timeRanges": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "timezone": {
+            "description": "IANA zone for displaying times",
+            "type": "string"
+          }
+        },
+        "required": [
+          "defaultTimeRange",
+          "environments",
+          "timeRanges",
+          "timezone"
+        ],
+        "type": "object"
+      },
+      "ErrorBody": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "db": {
+            "type": "boolean"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "splunkOk": {
+            "type": "boolean"
+          },
+          "vpnHealthy": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "db",
+          "ok",
+          "splunkOk",
+          "vpnHealthy"
+        ],
+        "type": "object"
+      },
+      "Job": {
+        "properties": {
+          "analyzedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "environment": {
+            "type": "string"
+          },
+          "failureReason": {
+            "type": "string"
+          },
+          "finishedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "inputKind": {
+            "enum": [
+              "transaction_id",
+              "curl"
+            ],
+            "type": "string"
+          },
+          "queuedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "searchDoneAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "QUEUED",
+              "CHECKING_VPN",
+              "SEARCHING",
+              "ANALYZING",
+              "WAITING_VPN",
+              "WAITING_SPLUNK",
+              "DONE",
+              "NO_LOGS",
+              "FAILED",
+              "CANCELLED",
+              "EXPIRED"
+            ],
+            "type": "string"
+          },
+          "timeRange": {
+            "type": "string"
+          },
+          "transactionId": {
+            "type": "string"
+          },
+          "userId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "username": {
+            "type": "string"
+          },
+          "vpnCheckedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "waitingSince": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "environment",
+          "id",
+          "inputKind",
+          "queuedAt",
+          "status",
+          "timeRange",
+          "transactionId",
+          "userId",
+          "username"
+        ],
+        "type": "object"
+      },
+      "JobListResponse": {
+        "properties": {
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/Job"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "jobs"
+        ],
+        "type": "object"
+      },
+      "JobView": {
+        "properties": {
+          "analyzedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "environment": {
+            "type": "string"
+          },
+          "failureReason": {
+            "type": "string"
+          },
+          "finishedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "inputKind": {
+            "enum": [
+              "transaction_id",
+              "curl"
+            ],
+            "type": "string"
+          },
+          "queuePosition": {
+            "description": "Jobs ahead of this one while it is pending",
+            "format": "int64",
+            "nullable": true,
+            "type": "integer"
+          },
+          "queuedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "result": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Result"
+              }
+            ],
+            "nullable": true
+          },
+          "searchDoneAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "QUEUED",
+              "CHECKING_VPN",
+              "SEARCHING",
+              "ANALYZING",
+              "WAITING_VPN",
+              "WAITING_SPLUNK",
+              "DONE",
+              "NO_LOGS",
+              "FAILED",
+              "CANCELLED",
+              "EXPIRED"
+            ],
+            "type": "string"
+          },
+          "timeRange": {
+            "type": "string"
+          },
+          "transactionId": {
+            "type": "string"
+          },
+          "userId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "username": {
+            "type": "string"
+          },
+          "vpnCheckedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "waitingSince": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "environment",
+          "id",
+          "inputKind",
+          "queuedAt",
+          "status",
+          "timeRange",
+          "transactionId",
+          "userId",
+          "username"
+        ],
+        "type": "object"
+      },
+      "LoginRequest": {
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "password",
+          "username"
+        ],
+        "type": "object"
+      },
+      "LoginURLResponse": {
+        "properties": {
+          "state": {
+            "enum": [
+              "IDLE",
+              "CONNECTING",
+              "WAITING_CALLBACK",
+              "SUBMITTING",
+              "CONNECTED",
+              "FAILED"
+            ],
+            "type": "string"
+          },
+          "url": {
+            "description": "/saml-login or an https URL; null until captured",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "type": "object"
+      },
+      "LogsResponse": {
+        "properties": {
+          "lines": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "lines"
+        ],
+        "type": "object"
+      },
+      "OKResponse": {
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "type": "object"
+      },
+      "QueueSummary": {
+        "properties": {
+          "active": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "max": {
+            "format": "int64",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "active",
+          "max"
+        ],
+        "type": "object"
+      },
+      "ReachResult": {
+        "properties": {
+          "error": {
+            "type": "string"
+          },
+          "host": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "host",
+          "ok"
+        ],
+        "type": "object"
+      },
+      "Result": {
+        "properties": {
+          "errorSource": {
+            "enum": [
+              "esb",
+              "tibco",
+              "internal",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          "errorType": {
+            "type": "string"
+          },
+          "failedComponent": {
+            "type": "string"
+          },
+          "likelyCause": {
+            "type": "string"
+          },
+          "llmFailed": {
+            "type": "boolean"
+          },
+          "qaMessage": {
+            "type": "string"
+          },
+          "rawLogSnippet": {
+            "type": "string"
+          },
+          "relevantLogs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "severity": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
+            "type": "string"
+          },
+          "sourceLabel": {
+            "type": "string"
+          },
+          "suggestedAction": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "llmFailed"
+        ],
+        "type": "object"
+      },
+      "SessionInfo": {
+        "properties": {
+          "lastReauthAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "lastReauthLog": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "lastReauthOk": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "loaded": {
+            "type": "boolean"
+          },
+          "missingCookies": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "reauthRunning": {
+            "type": "boolean"
+          },
+          "savedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "required": [
+          "loaded",
+          "reauthRunning"
+        ],
+        "type": "object"
+      },
+      "SessionResponse": {
+        "properties": {
+          "csrfToken": {
+            "description": "Send as X-CSRF-Token on POST/PATCH",
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/User"
+          }
+        },
+        "required": [
+          "csrfToken",
+          "user"
+        ],
+        "type": "object"
+      },
+      "SplunkSummary": {
+        "properties": {
+          "checkedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "ok": {
+            "type": "boolean"
+          },
+          "paused": {
+            "type": "boolean"
+          },
+          "reauthing": {
+            "type": "boolean"
+          },
+          "session": {
+            "$ref": "#/components/schemas/SessionInfo"
+          }
+        },
+        "required": [
+          "checkedAt",
+          "ok",
+          "paused",
+          "reauthing",
+          "session"
+        ],
+        "type": "object"
+      },
+      "StatusResult": {
+        "properties": {
+          "connectAlive": {
+            "type": "boolean"
+          },
+          "connectedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "connectedBy": {
+            "type": "string"
+          },
+          "gpStatus": {
+            "type": "string"
+          },
+          "healthy": {
+            "type": "boolean"
+          },
+          "iface": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "operator": {
+            "type": "string"
+          },
+          "reach": {
+            "items": {
+              "$ref": "#/components/schemas/ReachResult"
+            },
+            "type": "array"
+          },
+          "state": {
+            "enum": [
+              "IDLE",
+              "CONNECTING",
+              "WAITING_CALLBACK",
+              "SUBMITTING",
+              "CONNECTED",
+              "FAILED"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "connectAlive",
+          "gpStatus",
+          "healthy",
+          "iface",
+          "reach",
+          "state"
+        ],
+        "type": "object"
+      },
+      "SubmitJobRequest": {
+        "properties": {
+          "environment": {
+            "type": "string"
+          },
+          "force": {
+            "description": "Run again even if a result from the last 24h exists",
+            "type": "boolean"
+          },
+          "input": {
+            "description": "Transaction ID or full curl command",
+            "type": "string"
+          },
+          "timeRange": {
+            "enum": [
+              "24h",
+              "48h"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "environment",
+          "input",
+          "timeRange"
+        ],
+        "type": "object"
+      },
+      "SubmitJobResponse": {
+        "properties": {
+          "duplicate": {
+            "type": "boolean"
+          },
+          "job": {
+            "$ref": "#/components/schemas/JobView"
+          }
+        },
+        "required": [
+          "duplicate",
+          "job"
+        ],
+        "type": "object"
+      },
+      "SystemStatus": {
+        "properties": {
+          "banners": {
+            "items": {
+              "$ref": "#/components/schemas/Banner"
+            },
+            "type": "array"
+          },
+          "queue": {
+            "$ref": "#/components/schemas/QueueSummary"
+          },
+          "splunk": {
+            "$ref": "#/components/schemas/SplunkSummary"
+          },
+          "vpn": {
+            "$ref": "#/components/schemas/VPNSummary"
+          }
+        },
+        "required": [
+          "banners",
+          "queue",
+          "splunk",
+          "vpn"
+        ],
+        "type": "object"
+      },
+      "UpdateUserRequest": {
+        "properties": {
+          "active": {
+            "nullable": true,
+            "type": "boolean"
+          },
+          "password": {
+            "nullable": true,
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "qa",
+              "engineer"
+            ],
+            "nullable": true,
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "User": {
+        "properties": {
+          "active": {
+            "type": "boolean"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "role": {
+            "enum": [
+              "qa",
+              "engineer"
+            ],
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "active",
+          "createdAt",
+          "id",
+          "role",
+          "username"
+        ],
+        "type": "object"
+      },
+      "UserListResponse": {
+        "properties": {
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/User"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "users"
+        ],
+        "type": "object"
+      },
+      "VPNStateResponse": {
+        "properties": {
+          "state": {
+            "enum": [
+              "IDLE",
+              "CONNECTING",
+              "WAITING_CALLBACK",
+              "SUBMITTING",
+              "CONNECTED",
+              "FAILED"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "type": "object"
+      },
+      "VPNSummary": {
+        "properties": {
+          "checkedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "connectedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "connectedBy": {
+            "type": "string"
+          },
+          "detail": {
+            "type": "string"
+          },
+          "healthy": {
+            "type": "boolean"
+          },
+          "operator": {
+            "description": "User currently running a connect attempt",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "IDLE",
+              "CONNECTING",
+              "WAITING_CALLBACK",
+              "SUBMITTING",
+              "CONNECTED",
+              "FAILED"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "checkedAt",
+          "healthy",
+          "state"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "session": {
+        "in": "cookie",
+        "name": "fbw_session",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "Unsafe methods need the X-CSRF-Token header returned by /api/auth/login or /api/me.",
+    "title": "Find Bugs Web API",
+    "version": "dev"
+  },
+  "openapi": "3.0.3",
+  "paths": {
+    "/api/audit": {
+      "get": {
+        "operationId": "listAudit",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditListResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Audit log of VPN/Splunk actions",
+        "tags": [
+          "users"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Log in",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Log out",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/environments": {
+      "get": {
+        "operationId": "environments",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvironmentsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Form options",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/jobs": {
+      "get": {
+        "operationId": "listJobs",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "environment",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "transactionId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "beforeId",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mine",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobListResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "List jobs (QA: own only)",
+        "tags": [
+          "jobs"
+        ]
+      },
+      "post": {
+        "operationId": "submitJob",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitJobRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmitJobResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmitJobResponse"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Submit an investigation",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/jobs/{id}": {
+      "get": {
+        "operationId": "getJob",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Job detail and result",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/jobs/{id}/cancel": {
+      "post": {
+        "operationId": "cancelJob",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Cancel a pending job",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/api/me": {
+      "get": {
+        "operationId": "me",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Current user",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/splunk/reauth": {
+      "post": {
+        "operationId": "splunkReauth",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SplunkSummary"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Start SSO re-auth (waits for 2FA in background)",
+        "tags": [
+          "splunk"
+        ]
+      }
+    },
+    "/api/splunk/status": {
+      "get": {
+        "operationId": "splunkStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SplunkSummary"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Splunk session state",
+        "tags": [
+          "splunk"
+        ]
+      }
+    },
+    "/api/system/status": {
+      "get": {
+        "operationId": "systemStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "VPN, Splunk and queue state with banners",
+        "tags": [
+          "system"
+        ]
+      }
+    },
+    "/api/users": {
+      "get": {
+        "operationId": "listUsers",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserListResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "List users",
+        "tags": [
+          "users"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
+      },
+      "post": {
+        "operationId": "createUser",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Create user",
+        "tags": [
+          "users"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
+      }
+    },
+    "/api/users/{id}": {
+      "patch": {
+        "operationId": "updateUser",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/User"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Update user",
+        "tags": [
+          "users"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
+      }
+    },
+    "/api/vpn/callback": {
+      "post": {
+        "operationId": "vpnCallback",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CallbackRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CallbackResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Submit the globalprotectcallback: URI",
+        "tags": [
+          "vpn"
+        ]
+      }
+    },
+    "/api/vpn/connect": {
+      "post": {
+        "operationId": "vpnConnect",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VPNStateResponse"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Start GlobalProtect connect",
+        "tags": [
+          "vpn"
+        ]
+      }
+    },
+    "/api/vpn/disconnect": {
+      "post": {
+        "operationId": "vpnDisconnect",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CmdResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Disconnect GlobalProtect",
+        "tags": [
+          "vpn"
+        ]
+      }
+    },
+    "/api/vpn/login-url": {
+      "get": {
+        "operationId": "vpnLoginURL",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginURLResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "SAML login link once captured",
+        "tags": [
+          "vpn"
+        ]
+      }
+    },
+    "/api/vpn/logs": {
+      "get": {
+        "operationId": "vpnLogs",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Redacted connect log",
+        "tags": [
+          "vpn"
+        ]
+      }
+    },
+    "/api/vpn/status": {
+      "get": {
+        "operationId": "vpnStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Live VPN status",
+        "tags": [
+          "vpn"
+        ]
+      }
+    },
+    "/healthz": {
+      "get": {
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "summary": "Health check",
+        "tags": [
+          "system"
+        ]
+      }
+    }
+  }
+}
