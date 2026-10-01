@@ -1,0 +1,305 @@
+// Package worker runs queued investigations one at a time:
+// VPN check → Splunk search → AI analysis → stored result.
+package worker
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log/slog"
+	"time"
+
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/analyzer"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/redact"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/splunk"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/watchdog"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/notify"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/store"
+)
+
+// RawSnippetChars is how much of the (redacted) raw log is kept for the
+// engineer report, matching the bot's last-3000-characters snippet.
+const RawSnippetChars = 3000
+
+// Searcher is the subset of splunk.Client used by the worker.
+type Searcher interface {
+	Search(ctx context.Context, env, txn, timeRange string) (splunk.Result, error)
+}
+
+// Monitor is the subset of watchdog.Monitor used by the worker.
+type Monitor interface {
+	State() watchdog.State
+	CheckVPN(ctx context.Context) bool
+	CheckSplunk(ctx context.Context) bool
+	MarkVPNDown(ctx context.Context, detail string)
+	AutoReauth(ctx context.Context) bool
+	Subscribe() <-chan struct{}
+}
+
+// Config tunes the worker.
+type Config struct {
+	WaitingExpiry   time.Duration // WAITING_* jobs expire after this
+	RecheckAfter    time.Duration // re-check VPN/Splunk if a job runs longer
+	JobTimeout      time.Duration // hard limit per job
+	IdlePoll        time.Duration // how often to look for work when idle
+	PublicURL       string
+}
+
+// Worker processes jobs.
+type Worker struct {
+	Store    *store.Store
+	Splunk   Searcher
+	Analyzer analyzer.Analyzer
+	Monitor  Monitor
+	Notify   notify.Notifier
+	Cfg      Config
+
+	wake chan struct{}
+}
+
+// New returns a Worker.
+func New(st *store.Store, s Searcher, a analyzer.Analyzer, m Monitor, n notify.Notifier, cfg Config) *Worker {
+	if cfg.IdlePoll <= 0 {
+		cfg.IdlePoll = 5 * time.Second
+	}
+	if n == nil {
+		n = notify.Nop{}
+	}
+	return &Worker{Store: st, Splunk: s, Analyzer: a, Monitor: m, Notify: n, Cfg: cfg, wake: make(chan struct{}, 1)}
+}
+
+// Wake asks the worker to look for work now.
+func (w *Worker) Wake() {
+	select {
+	case w.wake <- struct{}{}:
+	default:
+	}
+}
+
+// Recover fails jobs left running by a previous process. Call before Run.
+func (w *Worker) Recover(ctx context.Context) error {
+	failed, err := w.Store.FailRunning(ctx, "Server restart saat job berjalan. Silakan submit ulang.")
+	for _, j := range failed {
+		slog.Warn("job failed by restart", "job", j.ID)
+	}
+	return err
+}
+
+// Run loops until ctx is done.
+func (w *Worker) Run(ctx context.Context) {
+	monWake := w.Monitor.Subscribe()
+	for ctx.Err() == nil {
+		worked, err := w.Step(ctx)
+		if err != nil && ctx.Err() == nil {
+			slog.Error("worker step", "err", err)
+		}
+		if worked {
+			continue
+		}
+		select {
+		case <-ctx.Done():
+		case <-w.wake:
+		case <-monWake:
+		case <-time.After(w.Cfg.IdlePoll):
+		}
+	}
+}
+
+// Step expires stale waiting jobs and processes at most one job. It reports
+// whether a job was run (so the caller can immediately look for the next).
+func (w *Worker) Step(ctx context.Context) (bool, error) {
+	if w.Cfg.WaitingExpiry > 0 {
+		expired, err := w.Store.ExpireWaiting(ctx, time.Now().Add(-w.Cfg.WaitingExpiry),
+			fmt.Sprintf("Kedaluwarsa setelah menunggu %s. Sambungkan VPN/Splunk lalu submit ulang.", w.Cfg.WaitingExpiry))
+		if err != nil {
+			return false, err
+		}
+		for _, j := range expired {
+			slog.Info("job expired", "job", j.ID)
+		}
+	}
+	job, err := w.Store.NextPending(ctx)
+	if errors.Is(err, store.ErrNotFound) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	st := w.Monitor.State()
+	if !st.VPNHealthy {
+		return false, w.holdPending(ctx, store.StatusWaitingVPN)
+	}
+	if st.SplunkPaused {
+		return false, w.holdPending(ctx, store.StatusWaitingSplunk)
+	}
+	w.run(ctx, job)
+	return true, nil
+}
+
+// holdPending moves every QUEUED (or other WAITING) job to status so users
+// see why nothing is moving.
+func (w *Worker) holdPending(ctx context.Context, status string) error {
+	from := []string{store.StatusQueued, store.StatusWaitingVPN, store.StatusWaitingSplunk}
+	jobs, err := w.Store.ListJobs(ctx, store.JobFilter{Limit: 200})
+	if err != nil {
+		return err
+	}
+	for _, j := range jobs {
+		if j.Status == status || !contains(from, j.Status) {
+			continue
+		}
+		if err := w.Store.SetStatus(ctx, j.ID, from, store.Transition{Status: status}); err != nil && !errors.Is(err, store.ErrConflict) {
+			return err
+		}
+	}
+	return nil
+}
+
+func contains(ss []string, s string) bool {
+	for _, x := range ss {
+		if x == s {
+			return true
+		}
+	}
+	return false
+}
+
+// errStop marks a failure already recorded on the job.
+var errStop = errors.New("stop")
+
+func (w *Worker) run(parent context.Context, job store.Job) {
+	log := slog.With("job", job.ID, "txn", job.TransactionID, "env", job.Environment)
+	err := w.Store.SetStatus(parent, job.ID, store.PendingStatuses, store.Transition{Status: store.StatusCheckingVPN, Stamp: "started_at"})
+	if errors.Is(err, store.ErrConflict) {
+		return // cancelled meanwhile
+	}
+	if err != nil {
+		log.Error("start job", "err", err)
+		return
+	}
+
+	ctx, cancel := context.WithCancelCause(parent)
+	defer cancel(nil)
+	if w.Cfg.JobTimeout > 0 {
+		var c context.CancelFunc
+		ctx, c = context.WithTimeoutCause(ctx, w.Cfg.JobTimeout, fmt.Errorf("job melebihi batas waktu %s", w.Cfg.JobTimeout))
+		defer c()
+	}
+	if w.Cfg.RecheckAfter > 0 {
+		stop := w.recheckLater(ctx, cancel, log)
+		defer stop()
+	}
+
+	// 1. VPN, live.
+	if !w.Monitor.CheckVPN(ctx) {
+		// Nothing has run yet: put the job back to wait instead of failing it.
+		w.set(parent, job.ID, store.Transition{Status: store.StatusWaitingVPN})
+		return
+	}
+
+	// 2. Splunk.
+	w.set(parent, job.ID, store.Transition{Status: store.StatusSearching, Stamp: "vpn_checked_at"})
+	res, err := w.Splunk.Search(ctx, job.Environment, job.TransactionID, job.TimeRange)
+	if errors.Is(err, splunk.ErrSessionExpired) || errors.Is(err, splunk.ErrNoSession) {
+		log.Warn("splunk session expired during job", "err", err)
+		if ctx.Err() == nil && w.Monitor.CheckVPN(ctx) && w.Monitor.AutoReauth(ctx) {
+			res, err = w.Splunk.Search(ctx, job.Environment, job.TransactionID, job.TimeRange)
+		}
+	}
+	if err != nil {
+		w.fail(parent, ctx, job, w.searchFailure(parent, ctx, err))
+		return
+	}
+
+	if res.Status == splunk.ResultNoLogs {
+		if err := w.Store.SaveInvestigation(parent, store.Investigation{JobID: job.ID, RelevantLogs: []string{}}); err != nil {
+			log.Error("save investigation", "err", err)
+		}
+		w.set(parent, job.ID, store.Transition{Status: store.StatusNoLogs, Stamp: "search_done_at"})
+		return
+	}
+
+	// 3. AI analysis. Logs are redacted before they are stored or sent.
+	w.set(parent, job.ID, store.Transition{Status: store.StatusAnalyzing, Stamp: "search_done_at"})
+	logs := redact.Logs(res.Logs, 0)
+	inv := store.Investigation{JobID: job.ID, RawLogSnippet: redact.Tail(logs, RawSnippetChars), RelevantLogs: []string{}}
+	d, aerr := w.Analyzer.Analyze(ctx, job.TransactionID, logs)
+	reason := ""
+	if aerr != nil {
+		if cause := context.Cause(ctx); cause != nil && ctx.Err() != nil {
+			w.fail(parent, ctx, job, cause.Error())
+			return
+		}
+		log.Warn("analysis failed, keeping raw logs", "err", aerr)
+		inv.LLMFailed = true
+		reason = "Analisis AI gagal; log mentah tetap tersedia untuk engineer."
+		w.Notify.Notify(parent, "llm-failed", fmt.Sprintf("⚠️ Analisis AI gagal untuk job #%d (%s). Log mentah tersimpan.", job.ID, job.TransactionID))
+	} else {
+		inv.Summary, inv.ErrorType, inv.FailedComponent = d.Summary, d.ErrorType, d.FailedComponent
+		inv.LikelyCause, inv.Severity, inv.SuggestedAction = d.LikelyCause, d.Severity, d.SuggestedAction
+		inv.ErrorSource = d.ErrorSource
+		for _, l := range d.RelevantLogs {
+			inv.RelevantLogs = append(inv.RelevantLogs, redact.Sensitive(l))
+		}
+	}
+	if err := w.Store.SaveInvestigation(parent, inv); err != nil {
+		w.fail(parent, ctx, job, "Gagal menyimpan hasil: "+err.Error())
+		return
+	}
+	w.set(parent, job.ID, store.Transition{Status: store.StatusDone, Stamp: "analyzed_at", FailureReason: reason})
+	log.Info("job done", "llm_failed", inv.LLMFailed)
+}
+
+// searchFailure turns a Splunk error into a user-facing reason, noting a
+// VPN drop or an expired Splunk session.
+func (w *Worker) searchFailure(parent, ctx context.Context, err error) string {
+	if cause := context.Cause(ctx); cause != nil && ctx.Err() != nil {
+		return cause.Error()
+	}
+	if errors.Is(err, splunk.ErrSessionExpired) || errors.Is(err, splunk.ErrNoSession) {
+		return "Sesi Splunk kedaluwarsa dan login ulang gagal. Antrean dijeda sampai ada yang Re-auth di panel Splunk."
+	}
+	if !w.Monitor.CheckVPN(parent) {
+		return "VPN putus saat mencari log di Splunk. Sambungkan VPN lalu submit ulang."
+	}
+	return "Gagal mencari log di Splunk: " + redact.Sensitive(err.Error())
+}
+
+func (w *Worker) fail(parent, ctx context.Context, job store.Job, reason string) {
+	slog.Warn("job failed", "job", job.ID, "reason", reason)
+	w.set(parent, job.ID, store.Transition{Status: store.StatusFailed, FailureReason: reason})
+	link := ""
+	if w.Cfg.PublicURL != "" {
+		link = fmt.Sprintf("\n%s/jobs/%d", w.Cfg.PublicURL, job.ID)
+	}
+	w.Notify.Notify(parent, "", fmt.Sprintf("❌ Job #%d (%s, %s) gagal: %s%s", job.ID, job.TransactionID, job.Environment, reason, link))
+}
+
+func (w *Worker) set(ctx context.Context, id int64, t store.Transition) {
+	if err := w.Store.SetStatus(ctx, id, nil, t); err != nil {
+		slog.Error("set job status", "job", id, "status", t.Status, "err", err)
+	}
+}
+
+// recheckLater re-validates VPN and Splunk once the job has been running for
+// RecheckAfter; if either is gone it cancels the job so the user is not left
+// waiting on a dead session.
+func (w *Worker) recheckLater(ctx context.Context, cancel context.CancelCauseFunc, log *slog.Logger) func() {
+	t := time.AfterFunc(w.Cfg.RecheckAfter, func() {
+		if ctx.Err() != nil {
+			return
+		}
+		// Status checks must not inherit the job context we may cancel.
+		bg := context.WithoutCancel(ctx)
+		if !w.Monitor.CheckVPN(bg) {
+			log.Warn("vpn gone during long job")
+			cancel(errors.New("Job berjalan lebih dari " + w.Cfg.RecheckAfter.String() + " dan VPN ternyata putus/sesi GlobalProtect habis. Login ulang VPN lalu submit ulang."))
+			return
+		}
+		if st := w.Monitor.State(); !st.Reauthing && !w.Monitor.CheckSplunk(bg) {
+			log.Warn("splunk session gone during long job")
+			cancel(errors.New("Job berjalan lebih dari " + w.Cfg.RecheckAfter.String() + " dan sesi Splunk ternyata habis. Re-auth Splunk lalu submit ulang."))
+		}
+	})
+	return func() { t.Stop() }
+}
