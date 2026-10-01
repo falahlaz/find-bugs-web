@@ -1,3 +1,3 @@
-import { Placeholder } from '@/app/placeholder'
+import { VpnPage } from './vpn-page'
 
-export const vpnRoutes = [{ path: 'vpn', element: <Placeholder title="Panel VPN" phase={3} /> }]
+export const vpnRoutes = [{ path: 'vpn', element: <VpnPage /> }]

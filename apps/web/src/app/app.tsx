@@ -1,12 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createBrowserRouter, RouterProvider } from 'react-router'
+import { adminRoutes } from '@/features/admin/routes'
 import { findbugsRoutes } from '@/features/findbugs/routes'
 import { splunkRoutes } from '@/features/splunk/routes'
 import { vpnRoutes } from '@/features/vpn/routes'
 import { AuthProvider } from './auth'
 import { Layout } from './layout'
 import { LoginPage } from './login-page'
-import { Placeholder } from './placeholder'
+import { NotFound } from './not-found'
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: true } },
@@ -22,8 +23,8 @@ const router = createBrowserRouter([
       ...findbugsRoutes,
       ...vpnRoutes,
       ...splunkRoutes,
-      { path: 'users', element: <Placeholder title="Manajemen user" phase={3} /> },
-      { path: '*', element: <Placeholder title="Halaman tidak ditemukan" phase={2} /> },
+      ...adminRoutes,
+      { path: '*', element: <NotFound /> },
     ],
   },
 ])

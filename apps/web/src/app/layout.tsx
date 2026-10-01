@@ -44,7 +44,7 @@ export function Layout() {
   if (loading) return <div className="p-6 text-muted-foreground">Memuat…</div>
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />
 
-  const items = user.role === 'engineer' ? [...nav, { to: '/users', label: 'User' }] : nav
+  const items = user.role === 'engineer' ? [...nav, { to: '/users', label: 'User' }, { to: '/audit', label: 'Audit' }] : nav
   return (
     <div className="min-h-svh">
       <header className="flex items-center gap-6 border-b px-6 py-3">

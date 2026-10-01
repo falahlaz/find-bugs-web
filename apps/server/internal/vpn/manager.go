@@ -19,6 +19,11 @@ import (
 
 type State string
 
+// EnumValues lists every state (used by the OpenAPI generator).
+func (State) EnumValues() []string {
+	return []string{string(StateIdle), string(StateConnecting), string(StateWaitingCallback), string(StateSubmitting), string(StateConnected), string(StateFailed)}
+}
+
 const (
 	StateIdle            State = "IDLE"
 	StateConnecting      State = "CONNECTING"

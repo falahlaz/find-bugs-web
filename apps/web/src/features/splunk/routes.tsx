@@ -1,3 +1,3 @@
-import { Placeholder } from '@/app/placeholder'
+import { SplunkPage } from './splunk-page'
 
-export const splunkRoutes = [{ path: 'splunk', element: <Placeholder title="Panel sesi Splunk" phase={3} /> }]
+export const splunkRoutes = [{ path: 'splunk', element: <SplunkPage /> }]

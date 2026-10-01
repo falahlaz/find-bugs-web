@@ -378,7 +378,8 @@ export interface components {
         CallbackResult: {
             /** Format: int64 */
             exitCode: number;
-            state: string;
+            /** @enum {string} */
+            state: "IDLE" | "CONNECTING" | "WAITING_CALLBACK" | "SUBMITTING" | "CONNECTED" | "FAILED";
             stderr: string;
             stdout: string;
         };
@@ -483,7 +484,8 @@ export interface components {
             username: string;
         };
         LoginURLResponse: {
-            state: string;
+            /** @enum {string} */
+            state: "IDLE" | "CONNECTING" | "WAITING_CALLBACK" | "SUBMITTING" | "CONNECTED" | "FAILED";
             /** @description /saml-login or an https URL; null until captured */
             url?: string | null;
         };
@@ -555,7 +557,8 @@ export interface components {
             iface: string[];
             operator?: string;
             reach: components["schemas"]["ReachResult"][];
-            state: string;
+            /** @enum {string} */
+            state: "IDLE" | "CONNECTING" | "WAITING_CALLBACK" | "SUBMITTING" | "CONNECTED" | "FAILED";
         };
         SubmitJobRequest: {
             environment: string;
@@ -596,7 +599,8 @@ export interface components {
             users: components["schemas"]["User"][];
         };
         VPNStateResponse: {
-            state: string;
+            /** @enum {string} */
+            state: "IDLE" | "CONNECTING" | "WAITING_CALLBACK" | "SUBMITTING" | "CONNECTED" | "FAILED";
         };
         VPNSummary: {
             /** Format: date-time */
@@ -608,7 +612,8 @@ export interface components {
             healthy: boolean;
             /** @description User currently running a connect attempt */
             operator?: string;
-            state: string;
+            /** @enum {string} */
+            state: "IDLE" | "CONNECTING" | "WAITING_CALLBACK" | "SUBMITTING" | "CONNECTED" | "FAILED";
         };
     };
     responses: never;
@@ -621,7 +626,9 @@ export type $defs = Record<string, never>;
 export interface operations {
     listAudit: {
         parameters: {
-            query?: never;
+            query?: {
+                limit?: string;
+            };
             header?: never;
             path?: never;
             cookie?: never;

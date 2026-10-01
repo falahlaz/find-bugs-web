@@ -49,6 +49,9 @@ func (b *specBuilder) schemaFor(t reflect.Type) schema {
 		s = schema{"type": "object", "additionalProperties": b.schemaFor(t.Elem())}
 	case t.Kind() == reflect.String:
 		s = schema{"type": "string"}
+		if e, ok := reflect.Zero(t).Interface().(interface{ EnumValues() []string }); ok {
+			s["enum"] = e.EnumValues()
+		}
 	case t.Kind() == reflect.Bool:
 		s = schema{"type": "boolean"}
 	case t.Kind() >= reflect.Int && t.Kind() <= reflect.Uint64:

@@ -96,6 +96,14 @@
             "type": "integer"
           },
           "state": {
+            "enum": [
+              "IDLE",
+              "CONNECTING",
+              "WAITING_CALLBACK",
+              "SUBMITTING",
+              "CONNECTED",
+              "FAILED"
+            ],
             "type": "string"
           },
           "stderr": {
@@ -461,6 +469,14 @@
       "LoginURLResponse": {
         "properties": {
           "state": {
+            "enum": [
+              "IDLE",
+              "CONNECTING",
+              "WAITING_CALLBACK",
+              "SUBMITTING",
+              "CONNECTED",
+              "FAILED"
+            ],
             "type": "string"
           },
           "url": {
@@ -716,6 +732,14 @@
             "type": "array"
           },
           "state": {
+            "enum": [
+              "IDLE",
+              "CONNECTING",
+              "WAITING_CALLBACK",
+              "SUBMITTING",
+              "CONNECTED",
+              "FAILED"
+            ],
             "type": "string"
           }
         },
@@ -869,6 +893,14 @@
       "VPNStateResponse": {
         "properties": {
           "state": {
+            "enum": [
+              "IDLE",
+              "CONNECTING",
+              "WAITING_CALLBACK",
+              "SUBMITTING",
+              "CONNECTED",
+              "FAILED"
+            ],
             "type": "string"
           }
         },
@@ -902,6 +934,14 @@
             "type": "string"
           },
           "state": {
+            "enum": [
+              "IDLE",
+              "CONNECTING",
+              "WAITING_CALLBACK",
+              "SUBMITTING",
+              "CONNECTED",
+              "FAILED"
+            ],
             "type": "string"
           }
         },
@@ -931,6 +971,16 @@
     "/api/audit": {
       "get": {
         "operationId": "listAudit",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {

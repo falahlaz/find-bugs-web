@@ -3,7 +3,6 @@ package api
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"io/fs"
 	"log/slog"
@@ -153,7 +152,7 @@ func (a *API) registerRoutes() {
 		req: CreateUserRequest{}, resps: map[int]any{201: store.User{}}, h: a.createUser})
 	a.add(route{method: "PATCH", path: "/api/users/{id}", summary: "Update user", tag: "users", opID: "updateUser", roles: []string{engineer},
 		req: UpdateUserRequest{}, resps: map[int]any{200: store.User{}}, h: a.updateUser})
-	a.add(route{method: "GET", path: "/api/audit", summary: "Audit log of VPN/Splunk actions", tag: "users", opID: "listAudit", roles: []string{engineer},
+	a.add(route{method: "GET", path: "/api/audit", summary: "Audit log of VPN/Splunk actions", tag: "users", opID: "listAudit", roles: []string{engineer}, query: []string{"limit"},
 		resps: map[int]any{200: AuditListResponse{}}, h: a.listAudit})
 }
 
@@ -678,8 +677,17 @@ func (a *API) updateUser(w http.ResponseWriter, r *http.Request) {
 	if err := a.Store.DeleteUserSessions(r.Context(), id); err != nil {
 		slog.Error("delete sessions", "err", err)
 	}
-	changes, _ := json.Marshal(map[string]any{"role": req.Role, "active": req.Active, "passwordReset": req.Password != nil})
-	a.audit(r, "user.update", "ok", u.Username+" "+string(changes))
+	var changes []string
+	if req.Role != nil {
+		changes = append(changes, "role → "+*req.Role)
+	}
+	if req.Active != nil {
+		changes = append(changes, map[bool]string{true: "diaktifkan", false: "dinonaktifkan"}[*req.Active])
+	}
+	if req.Password != nil {
+		changes = append(changes, "password direset")
+	}
+	a.audit(r, "user.update", "ok", u.Username+": "+strings.Join(changes, ", "))
 	httpx.JSON(w, http.StatusOK, u)
 }
 
