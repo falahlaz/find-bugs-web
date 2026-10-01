@@ -12,7 +12,9 @@ docs/          PRD
 
 ## Status
 
-Fase 1 (pipeline headless) selesai: semua endpoint API sudah jalan dan teruji. Frontend baru berupa shell (login, navigasi, banner status); halaman submit, histori, panel VPN/Splunk, dan manajemen user dibangun di Fase 2–3.
+- **Fase 1 (pipeline headless):** selesai. Semua endpoint API jalan dan teruji.
+- **Fase 2 (website QA):** selesai. Login, form submit (transaction ID/curl, environment, 24h/48h), deteksi duplikat 24 jam dengan "Jalankan ulang", halaman job dengan progres per tahap (polling 2,5 detik), hasil QA vs laporan engineer, batalkan job yang masih antre, histori dengan filter, dan notifikasi browser saat job selesai.
+- **Fase 3:** panel VPN, panel Splunk, manajemen user, dan audit log di UI (API-nya sudah ada).
 
 ## Development
 

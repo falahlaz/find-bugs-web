@@ -131,7 +131,7 @@ func (s *Service) Get(ctx context.Context, u store.User, id int64) (store.Job, e
 
 // List returns jobs visible to u; QA users only see their own.
 func (s *Service) List(ctx context.Context, u store.User, f store.JobFilter) ([]store.Job, error) {
-	if u.Role != store.RoleEngineer {
+	if u.Role != store.RoleEngineer && f.UserID != u.ID {
 		f.UserID = u.ID
 	}
 	return s.Store.ListJobs(ctx, f)

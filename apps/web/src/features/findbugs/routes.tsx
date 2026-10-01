@@ -1,7 +1,9 @@
-import { Placeholder } from '@/app/placeholder'
+import { JobPage } from './job-page'
+import { JobsPage } from './jobs-page'
+import { SubmitPage } from './submit-page'
 
 export const findbugsRoutes = [
-  { index: true, element: <Placeholder title="Submit investigasi" phase={2} /> },
-  { path: 'jobs', element: <Placeholder title="Histori investigasi" phase={2} /> },
-  { path: 'jobs/:id', element: <Placeholder title="Detail job" phase={2} /> },
+  { index: true, element: <SubmitPage /> },
+  { path: 'jobs', element: <JobsPage /> },
+  { path: 'jobs/:id', element: <JobPage /> },
 ]

@@ -83,7 +83,11 @@ func serve() error {
 	if err != nil {
 		return err
 	}
-	defer st.Close()
+	// Stop background loops before closing the database.
+	defer func() {
+		stop()
+		st.Close()
+	}()
 
 	notifier := notify.NewTelegram(cfg.TelegramToken, cfg.TelegramChatID)
 	gp := vpn.NewManager(vpn.Config{Bin: cfg.GP.Bin, Portal: cfg.GP.Portal, Dir: cfg.GP.Dir, Browser: cfg.GP.Browser, ReachHosts: cfg.GP.ReachHosts})

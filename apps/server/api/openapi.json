@@ -172,12 +172,17 @@
               "type": "string"
             },
             "type": "array"
+          },
+          "timezone": {
+            "description": "IANA zone for displaying times",
+            "type": "string"
           }
         },
         "required": [
           "defaultTimeRange",
           "environments",
-          "timeRanges"
+          "timeRanges",
+          "timezone"
         ],
         "type": "object"
       },
@@ -241,6 +246,10 @@
             "type": "integer"
           },
           "inputKind": {
+            "enum": [
+              "transaction_id",
+              "curl"
+            ],
             "type": "string"
           },
           "queuedAt": {
@@ -258,6 +267,19 @@
             "type": "string"
           },
           "status": {
+            "enum": [
+              "QUEUED",
+              "CHECKING_VPN",
+              "SEARCHING",
+              "ANALYZING",
+              "WAITING_VPN",
+              "WAITING_SPLUNK",
+              "DONE",
+              "NO_LOGS",
+              "FAILED",
+              "CANCELLED",
+              "EXPIRED"
+            ],
             "type": "string"
           },
           "timeRange": {
@@ -334,6 +356,10 @@
             "type": "integer"
           },
           "inputKind": {
+            "enum": [
+              "transaction_id",
+              "curl"
+            ],
             "type": "string"
           },
           "queuePosition": {
@@ -365,6 +391,19 @@
             "type": "string"
           },
           "status": {
+            "enum": [
+              "QUEUED",
+              "CHECKING_VPN",
+              "SEARCHING",
+              "ANALYZING",
+              "WAITING_VPN",
+              "WAITING_SPLUNK",
+              "DONE",
+              "NO_LOGS",
+              "FAILED",
+              "CANCELLED",
+              "EXPIRED"
+            ],
             "type": "string"
           },
           "timeRange": {
@@ -531,6 +570,12 @@
             "type": "array"
           },
           "severity": {
+            "enum": [
+              "low",
+              "medium",
+              "high",
+              "critical"
+            ],
             "type": "string"
           },
           "sourceLabel": {
@@ -788,6 +833,10 @@
             "type": "integer"
           },
           "role": {
+            "enum": [
+              "qa",
+              "engineer"
+            ],
             "type": "string"
           },
           "username": {
@@ -1086,6 +1135,14 @@
           {
             "in": "query",
             "name": "limit",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mine",
             "required": false,
             "schema": {
               "type": "string"

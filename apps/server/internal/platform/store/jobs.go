@@ -60,8 +60,8 @@ type Job struct {
 	TransactionID string     `json:"transactionId"`
 	Environment   string     `json:"environment"`
 	TimeRange     string     `json:"timeRange"`
-	InputKind     string     `json:"inputKind"`
-	Status        string     `json:"status"`
+	InputKind     string     `json:"inputKind" enum:"transaction_id,curl"`
+	Status        string     `json:"status" enum:"QUEUED,CHECKING_VPN,SEARCHING,ANALYZING,WAITING_VPN,WAITING_SPLUNK,DONE,NO_LOGS,FAILED,CANCELLED,EXPIRED"`
 	FailureReason string     `json:"failureReason,omitempty"`
 	QueuedAt      time.Time  `json:"queuedAt"`
 	StartedAt     *time.Time `json:"startedAt,omitempty"`

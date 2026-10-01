@@ -398,6 +398,8 @@ export interface components {
             defaultTimeRange: string;
             environments: string[];
             timeRanges: string[];
+            /** @description IANA zone for displaying times */
+            timezone: string;
         };
         ErrorBody: {
             code?: string;
@@ -418,14 +420,16 @@ export interface components {
             finishedAt?: string | null;
             /** Format: int64 */
             id: number;
-            inputKind: string;
+            /** @enum {string} */
+            inputKind: "transaction_id" | "curl";
             /** Format: date-time */
             queuedAt: string;
             /** Format: date-time */
             searchDoneAt?: string | null;
             /** Format: date-time */
             startedAt?: string | null;
-            status: string;
+            /** @enum {string} */
+            status: "QUEUED" | "CHECKING_VPN" | "SEARCHING" | "ANALYZING" | "WAITING_VPN" | "WAITING_SPLUNK" | "DONE" | "NO_LOGS" | "FAILED" | "CANCELLED" | "EXPIRED";
             timeRange: string;
             transactionId: string;
             /** Format: int64 */
@@ -448,7 +452,8 @@ export interface components {
             finishedAt?: string | null;
             /** Format: int64 */
             id: number;
-            inputKind: string;
+            /** @enum {string} */
+            inputKind: "transaction_id" | "curl";
             /**
              * Format: int64
              * @description Jobs ahead of this one while it is pending
@@ -461,7 +466,8 @@ export interface components {
             searchDoneAt?: string | null;
             /** Format: date-time */
             startedAt?: string | null;
-            status: string;
+            /** @enum {string} */
+            status: "QUEUED" | "CHECKING_VPN" | "SEARCHING" | "ANALYZING" | "WAITING_VPN" | "WAITING_SPLUNK" | "DONE" | "NO_LOGS" | "FAILED" | "CANCELLED" | "EXPIRED";
             timeRange: string;
             transactionId: string;
             /** Format: int64 */
@@ -508,7 +514,8 @@ export interface components {
             qaMessage?: string;
             rawLogSnippet?: string;
             relevantLogs?: string[];
-            severity?: string;
+            /** @enum {string} */
+            severity?: "low" | "medium" | "high" | "critical";
             sourceLabel?: string;
             suggestedAction?: string;
             summary?: string;
@@ -581,7 +588,8 @@ export interface components {
             createdAt: string;
             /** Format: int64 */
             id: number;
-            role: string;
+            /** @enum {string} */
+            role: "qa" | "engineer";
             username: string;
         };
         UserListResponse: {
@@ -741,6 +749,7 @@ export interface operations {
                 to?: string;
                 beforeId?: string;
                 limit?: string;
+                mine?: string;
             };
             header?: never;
             path?: never;

@@ -121,7 +121,7 @@ func (a *API) registerRoutes() {
 	a.add(route{method: "POST", path: "/api/jobs", summary: "Submit an investigation", tag: "jobs", opID: "submitJob",
 		req: SubmitJobRequest{}, resps: map[int]any{200: SubmitJobResponse{}, 202: SubmitJobResponse{}}, h: a.submitJob})
 	a.add(route{method: "GET", path: "/api/jobs", summary: "List jobs (QA: own only)", tag: "jobs", opID: "listJobs",
-		query: []string{"environment", "status", "transactionId", "from", "to", "beforeId", "limit"},
+		query: []string{"environment", "status", "transactionId", "from", "to", "beforeId", "limit", "mine"},
 		resps: map[int]any{200: JobListResponse{}}, h: a.listJobs})
 	a.add(route{method: "GET", path: "/api/jobs/{id}", summary: "Job detail and result", tag: "jobs", opID: "getJob",
 		resps: map[int]any{200: JobView{}}, h: a.getJob})
@@ -236,6 +236,7 @@ func (a *API) buildStatus(active int) SystemStatus {
 func (a *API) environments(w http.ResponseWriter, _ *http.Request) {
 	httpx.JSON(w, http.StatusOK, EnvironmentsResponse{
 		Environments: jobs.SortedEnvironments(a.Jobs.Environments), TimeRanges: jobs.TimeRanges, DefaultTimeRange: "24h",
+		Timezone: a.Cfg.Location.String(),
 	})
 }
 
@@ -313,6 +314,9 @@ func (a *API) submitJob(w http.ResponseWriter, r *http.Request) {
 func (a *API) listJobs(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	f := store.JobFilter{Environment: q.Get("environment"), Status: q.Get("status"), TransactionID: q.Get("transactionId")}
+	if q.Get("mine") == "1" {
+		f.UserID = identity(r).User.ID
+	}
 	f.Limit, _ = strconv.Atoi(q.Get("limit"))
 	f.BeforeID, _ = strconv.ParseInt(q.Get("beforeId"), 10, 64)
 	for key, dst := range map[string]**time.Time{"from": &f.From, "to": &f.To} {

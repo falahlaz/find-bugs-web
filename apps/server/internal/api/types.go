@@ -30,6 +30,7 @@ type EnvironmentsResponse struct {
 	Environments     []string `json:"environments"`
 	TimeRanges       []string `json:"timeRanges"`
 	DefaultTimeRange string   `json:"defaultTimeRange"`
+	Timezone         string   `json:"timezone" doc:"IANA zone for displaying times"`
 }
 
 // SubmitJobRequest creates an investigation.
@@ -57,7 +58,7 @@ type JobView struct {
 // with a friendly message; engineers get every field and the raw log tail.
 type Result struct {
 	Summary         string   `json:"summary,omitempty"`
-	Severity        string   `json:"severity,omitempty"`
+	Severity        string   `json:"severity,omitempty" enum:"low,medium,high,critical"`
 	ErrorSource     string   `json:"errorSource,omitempty" enum:"esb,tibco,internal,unknown"`
 	SourceLabel     string   `json:"sourceLabel,omitempty"`
 	QAMessage       string   `json:"qaMessage,omitempty"`

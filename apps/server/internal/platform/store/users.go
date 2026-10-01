@@ -25,7 +25,7 @@ type User struct {
 	ID           int64     `json:"id"`
 	Username     string    `json:"username"`
 	PasswordHash string    `json:"-"`
-	Role         string    `json:"role"`
+	Role         string    `json:"role" enum:"qa,engineer"`
 	Active       bool      `json:"active"`
 	CreatedAt    time.Time `json:"createdAt"`
 }
