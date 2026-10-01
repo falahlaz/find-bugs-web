@@ -42,6 +42,7 @@ type Config struct {
 	RecheckAfter  time.Duration // re-check VPN/Splunk if a job runs longer
 	JobTimeout    time.Duration // hard limit per job
 	IdlePoll      time.Duration // how often to look for work when idle
+	LogDir        string        // per-job Splunk result files for the analyzer
 	PublicURL     string
 }
 
@@ -64,6 +65,9 @@ func New(st *store.Store, s Searcher, a analyzer.Analyzer, m Monitor, n notify.N
 	}
 	if n == nil {
 		n = notify.Nop{}
+	}
+	if cfg.LogDir == "" {
+		cfg.LogDir = "data/logs"
 	}
 	return &Worker{Store: st, Splunk: s, Analyzer: a, Monitor: m, Notify: n, Cfg: cfg, wake: make(chan struct{}, 1)}
 }
@@ -219,11 +223,17 @@ func (w *Worker) run(parent context.Context, job store.Job) {
 		return
 	}
 
-	// 3. AI analysis. Logs are redacted before they are stored or sent.
+	// 3. AI analysis. Logs are redacted before they are stored or sent; the
+	// analyzer reads every fetched event from the job's log file.
 	w.set(parent, job.ID, store.Transition{Status: store.StatusAnalyzing, Stamp: "search_done_at"})
 	logs := redact.Logs(res.Logs, 0)
 	inv := store.Investigation{JobID: job.ID, RawLogSnippet: redact.Tail(logs, RawSnippetChars), RelevantLogs: []string{}}
-	d, aerr := w.Analyzer.Analyze(ctx, job.TransactionID, logs)
+	log.Info("logs fetched", "events", len(res.Events), "matched", res.EventCount, "truncated", res.Truncated)
+	var d analyzer.Diagnosis
+	path, aerr := writeLogFile(w.Cfg.LogDir, job, res)
+	if aerr == nil {
+		d, aerr = w.Analyzer.Analyze(ctx, job.TransactionID, path)
+	}
 	reason := ""
 	if aerr != nil {
 		if cause := context.Cause(ctx); cause != nil && ctx.Err() != nil {

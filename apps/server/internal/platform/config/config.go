@@ -177,7 +177,7 @@ func Load(full bool) (Config, error) {
 		Claude: Claude{
 			Bin:     l.str("CLAUDE_BIN", "claude"),
 			Model:   l.str("CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
-			Timeout: l.dur("CLAUDE_TIMEOUT", 2*time.Minute),
+			Timeout: l.dur("CLAUDE_TIMEOUT", 5*time.Minute),
 		},
 
 		TelegramToken:  l.str("TELEGRAM_BOT_TOKEN", ""),
@@ -203,7 +203,7 @@ func Load(full bool) (Config, error) {
 		SkipTLSVerify:     l.bool("SPLUNK_SKIP_SSL_VERIFY", false),
 		ResultWaitTimeout: time.Duration(l.int("SPLUNK_RESULT_WAIT_TIMEOUT", 30)) * time.Second,
 		PollInterval:      time.Duration(l.int("SPLUNK_POLL_INTERVAL", 2)) * time.Second,
-		MaxLogLines:       l.int("MAX_LOG_LINES", 100),
+		MaxLogLines:       l.int("MAX_LOG_LINES", 5000),
 		LoginCommand:      strings.Fields(l.str("SPLUNK_LOGIN_CMD", "xvfb-run -a python3 scripts/splunk-login/save_session_auto.py")),
 		LoginTimeout:      l.dur("SPLUNK_LOGIN_TIMEOUT", 6*time.Minute),
 	}
