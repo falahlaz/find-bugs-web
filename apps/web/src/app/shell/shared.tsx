@@ -3,7 +3,6 @@ import { useEffect, type ReactNode } from 'react'
 import { Link, NavLink } from 'react-router'
 import { cn } from '@/lib/utils'
 import { useAuth } from '../auth-context'
-import { designs, useDesign } from '../design'
 import { ThemeToggle } from '../theme-toggle'
 import { useSystemStatus } from '../use-system-status'
 import { engineerNav } from './nav'
@@ -50,35 +49,6 @@ export function SystemBanners({ className }: { className?: string }) {
   )
 }
 
-/** A/B/C switch between the three explored designs. */
-export function DesignSwitcher({ className, full = false, vertical = false }: { className?: string; full?: boolean; vertical?: boolean }) {
-  const { design, setDesign } = useDesign()
-  return (
-    <div
-      role="group"
-      aria-label="Desain"
-      className={cn('inline-flex rounded-lg border bg-muted p-0.5', full && 'flex w-full', vertical && 'flex-col', className)}
-    >
-      {designs.map((d) => (
-        <button
-          key={d.id}
-          type="button"
-          title={`${d.short} · ${d.label}: ${d.hint}`}
-          aria-pressed={design === d.id}
-          onClick={() => setDesign(d.id)}
-          className={cn(
-            'rounded-md px-2.5 py-1 text-xs font-medium text-muted-foreground transition-colors',
-            full && 'flex-1 py-1.5',
-            design === d.id && 'bg-card text-foreground shadow-xs',
-          )}
-        >
-          {full ? `${d.short} · ${d.label}` : d.short}
-        </button>
-      ))}
-    </div>
-  )
-}
-
 /** Slide-up panel for phones (account menu, quick submit). */
 export function BottomSheet({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: ReactNode }) {
   useEffect(() => {
@@ -106,7 +76,7 @@ export function BottomSheet({ open, onClose, title, children }: { open: boolean;
       >
         <div className="mx-auto mb-3 h-1.5 w-10 rounded-full bg-border" />
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-display text-lg font-semibold">{title}</h2>
+          <h2 className="text-lg font-semibold">{title}</h2>
           <button type="button" onClick={onClose} className="rounded-full p-1.5 text-muted-foreground hover:bg-secondary" aria-label="Tutup">
             <X className="size-5" />
           </button>
@@ -117,7 +87,7 @@ export function BottomSheet({ open, onClose, title, children }: { open: boolean;
   )
 }
 
-/** Account, admin links, theme and design, for the phone navigation. */
+/** Account, admin links and theme, for the phone navigation. */
 export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user, logout } = useAuth()
   if (!user) return null
@@ -135,10 +105,6 @@ export function AccountSheet({ open, onClose }: { open: boolean; onClose: () => 
             ))}
           </nav>
         )}
-        <div className="grid gap-2">
-          <span className="text-xs font-medium text-muted-foreground">Desain</span>
-          <DesignSwitcher full />
-        </div>
         <div className="flex items-center justify-between gap-2">
           <ThemeToggle />
           <button type="button" onClick={() => void logout()} className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-secondary">

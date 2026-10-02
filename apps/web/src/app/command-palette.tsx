@@ -1,6 +1,7 @@
 import { Clock, Database, FileText, Plug, Plus, ScrollText, Search, Users, type LucideIcon } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
+import { setListFilters } from '@/features/findbugs/list-filters'
 import { useJobs } from '@/features/findbugs/queries'
 import { statusInfo, type JobStatus } from '@/features/findbugs/status'
 import { useSplunkReauth } from '@/features/splunk/queries'
@@ -89,7 +90,10 @@ function PaletteDialog() {
     if (q.length >= 3)
       out.push([
         'Histori',
-        [{ key: 'search', label: `Cari "${query.trim()}" di histori`, hint: 'Filter transaction ID', icon: Search, run: go(`/jobs?transactionId=${encodeURIComponent(query.trim())}`) }],
+        [{ key: 'search', label: `Cari "${query.trim()}" di histori`, hint: 'Filter transaction ID', icon: Search, run: () => {
+              setListFilters({ transactionId: query.trim(), status: undefined })
+              go('/jobs')()
+            }, }],
       ])
     return out.filter(([, items]) => items.length)
   }, [query, jobs.data, user, navigate, reauth])

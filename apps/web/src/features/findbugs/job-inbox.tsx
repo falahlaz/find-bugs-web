@@ -1,12 +1,15 @@
-import { Plus, Search } from 'lucide-react'
+import { Plus, Search, SlidersHorizontal, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, NavLink } from 'react-router'
 import { useAuth } from '@/app/auth-context'
 import { StatusDot } from '@/app/shell/shared'
 import { useHealth } from '@/app/shell/use-health'
+import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { formatShort } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { PAGE_SIZE, useJobs, useTimezone, type JobFilters } from './queries'
+import { advancedCount, setListFilters, useListFilters } from './list-filters'
+import { PAGE_SIZE, useEnvironments, useJobs, useTimezone, type JobFilters } from './queries'
 import { jobTone, type JobStatus } from './status'
 import { StatusBadge } from './status-badge'
 
@@ -18,31 +21,47 @@ const chips: { label: string; status?: string }[] = [
   { label: 'Gagal', status: 'FAILED' },
   { label: 'Tanpa log', status: 'NO_LOGS' },
   { label: 'Analisis', status: 'ANALYZING' },
+  { label: 'Antre', status: 'QUEUED' },
 ]
 
-/** B · Triage: the always-visible job inbox next to the detail pane. */
-export function TriageJobList() {
+function useDebounced<T>(value: T, ms: number) {
+  const [v, setV] = useState(value)
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms)
+    return () => clearTimeout(t)
+  }, [value, ms])
+  return v
+}
+
+/** The always-visible job inbox next to the detail pane. */
+export function JobInbox() {
   const { user } = useAuth()
   const tz = useTimezone()
   const health = useHealth()
+  const envs = useEnvironments()
   const engineer = user?.role === 'engineer'
-  const [text, setText] = useState('')
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState<string | undefined>()
-  const [mine, setMine] = useState(!engineer)
+  const f = useListFilters()
+  const mine = f.mine ?? !engineer
+  const [moreOpen, setMoreOpen] = useState(advancedCount(f) > 0)
   const [cursors, setCursors] = useState<number[]>([])
+  const search = useDebounced(f.transactionId?.trim() ?? '', 300)
 
-  useEffect(() => {
-    const t = setTimeout(() => {
-      setSearch(text.trim())
-      setCursors([])
-    }, 300)
-    return () => clearTimeout(t)
-  }, [text])
+  const update = (patch: Parameters<typeof setListFilters>[0]) => {
+    setListFilters(patch)
+    setCursors([])
+  }
 
-  const filters: JobFilters = { transactionId: search || undefined, status, mine: mine ? '1' : undefined }
+  const filters: JobFilters = {
+    transactionId: search || undefined,
+    status: f.status,
+    environment: f.environment,
+    from: f.from,
+    to: f.to,
+    mine: mine ? '1' : undefined,
+  }
   const jobs = useJobs(filters, cursors.at(-1))
   const list = jobs.data ?? []
+  const advanced = advancedCount(f)
 
   return (
     <>
@@ -72,14 +91,7 @@ export function TriageJobList() {
             {list.length === PAGE_SIZE ? '+' : ''}
           </span>
           {engineer && (
-            <button
-              type="button"
-              onClick={() => {
-                setMine((m) => !m)
-                setCursors([])
-              }}
-              className="text-xs text-muted-foreground underline-offset-2 hover:underline"
-            >
+            <button type="button" onClick={() => update({ mine: !mine })} className="text-xs text-muted-foreground underline-offset-2 hover:underline">
               {mine ? 'Milik saya' : 'Semua user'}
             </button>
           )}
@@ -88,29 +100,72 @@ export function TriageJobList() {
             Baru
           </Link>
         </div>
-        <label className="flex items-center gap-2 rounded-md border bg-card px-2.5 text-muted-foreground focus-within:border-ring">
-          <Search className="size-4" />
-          <span className="sr-only">Cari transaction ID</span>
-          <input
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Cari transaction ID"
-            className="min-w-0 flex-1 bg-transparent py-1.5 font-mono text-[12.5px] text-foreground outline-none placeholder:font-sans"
-          />
-        </label>
+        <div className="flex gap-1.5">
+          <label className="flex min-w-0 flex-1 items-center gap-2 rounded-md border bg-card px-2.5 text-muted-foreground focus-within:border-ring">
+            <Search className="size-4 shrink-0" />
+            <span className="sr-only">Cari transaction ID</span>
+            <input
+              value={f.transactionId ?? ''}
+              onChange={(e) => update({ transactionId: e.target.value || undefined })}
+              placeholder="Cari transaction ID"
+              className="min-w-0 flex-1 bg-transparent py-1.5 font-mono text-[12.5px] text-foreground outline-none placeholder:font-sans"
+            />
+          </label>
+          <button
+            type="button"
+            aria-expanded={moreOpen}
+            onClick={() => setMoreOpen((o) => !o)}
+            title="Filter environment dan tanggal"
+            className={cn('relative grid size-[34px] shrink-0 place-items-center rounded-md border bg-card text-muted-foreground hover:text-foreground', moreOpen && 'text-foreground')}
+          >
+            <SlidersHorizontal className="size-4" />
+            <span className="sr-only">Filter lanjutan</span>
+            {advanced > 0 && <span className="absolute -top-1 -right-1 grid size-4 place-items-center rounded-full bg-primary text-[10px] text-primary-foreground">{advanced}</span>}
+          </button>
+        </div>
+        {moreOpen && (
+          <div className="grid animate-rise gap-2 rounded-md border bg-muted p-2.5">
+            <label className="grid gap-1 text-[11px] font-medium text-muted-foreground">
+              Environment
+              <Select className="h-8" value={f.environment ?? ''} onChange={(e) => update({ environment: e.target.value || undefined })}>
+                <option value="">Semua</option>
+                {(envs.data?.environments ?? []).map((e) => (
+                  <option key={e}>{e}</option>
+                ))}
+              </Select>
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <label className="grid gap-1 text-[11px] font-medium text-muted-foreground">
+                Dari
+                <Input type="date" className="h-8 text-xs" value={f.from ?? ''} onChange={(e) => update({ from: e.target.value || undefined })} />
+              </label>
+              <label className="grid gap-1 text-[11px] font-medium text-muted-foreground">
+                Sampai
+                <Input type="date" className="h-8 text-xs" value={f.to ?? ''} onChange={(e) => update({ to: e.target.value || undefined })} />
+              </label>
+            </div>
+            {advanced > 0 && (
+              <button
+                type="button"
+                onClick={() => update({ environment: undefined, from: undefined, to: undefined })}
+                className="inline-flex items-center gap-1 justify-self-start text-xs text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3.5" />
+                Hapus filter lanjutan
+              </button>
+            )}
+          </div>
+        )}
         <div className="flex gap-1.5 overflow-x-auto [scrollbar-width:none]">
           {chips.map((c) => (
             <button
               key={c.label}
               type="button"
-              aria-pressed={status === c.status}
-              onClick={() => {
-                setStatus(c.status)
-                setCursors([])
-              }}
+              aria-pressed={f.status === c.status}
+              onClick={() => update({ status: c.status })}
               className={cn(
                 'shrink-0 rounded-full border px-2.5 py-1 text-xs text-muted-foreground transition-colors',
-                status === c.status && 'border-foreground bg-foreground text-background',
+                f.status === c.status && 'border-foreground bg-foreground text-background',
               )}
             >
               {c.label}

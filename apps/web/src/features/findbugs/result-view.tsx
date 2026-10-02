@@ -28,19 +28,17 @@ function Field({ label, value, mono = false, className }: { label: string; value
  * The AI summary, QA guidance and linked IDs. `animate` writes the summary
  * out when the result has just arrived on screen.
  */
-export function Diagnosis({ result, engineer, animate = false, header = true }: { result: Result; engineer: boolean; animate?: boolean; header?: boolean }) {
+export function Diagnosis({ result, engineer, animate = false }: { result: Result; engineer: boolean; animate?: boolean }) {
   const summary = useTypewriter(result.summary ?? '', animate)
   return (
     <div className="grid gap-3.5">
-      {header && (
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
           <Sparkles className="size-4 text-primary" />
-          <span className="font-display font-semibold">Diagnosis AI</span>
+          <span className="font-semibold">Diagnosis AI</span>
           <SeverityBadge severity={result.severity} />
           {result.sourceLabel && <span className="text-xs text-muted-foreground">Sumber: {result.sourceLabel}</span>}
           {result.model && <span className="ml-auto rounded-md border px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">{result.model}</span>}
-        </div>
-      )}
+      </div>
       {result.llmFailed && <Alert tone="warning">Analisis AI gagal untuk job ini. {engineer ? 'Log mentah di bawah tetap bisa dipakai.' : ''}</Alert>}
       {result.summary && <p className={cn('max-w-[68ch] text-[15px] leading-relaxed text-pretty', !summary.done && 'caret')}>{summary.text}</p>}
       {summary.done && result.qaMessage && <p className="animate-rise rounded-lg bg-secondary px-3 py-2.5 text-[13px]">{result.qaMessage}</p>}

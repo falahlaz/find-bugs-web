@@ -35,9 +35,3 @@ export function jobSteps(job: JobView): Step[] {
     return { ...r, state }
   })
 }
-
-/** 0..1 share of the pipeline that is behind this job. */
-export function jobProgress(job: JobView) {
-  const steps = jobSteps(job)
-  return steps.filter((s) => s.state === 'done' || s.state === 'skip').length / steps.length
-}

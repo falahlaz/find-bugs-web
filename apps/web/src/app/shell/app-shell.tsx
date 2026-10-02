@@ -1,13 +1,13 @@
 import { Inbox, LogOut, Plug, Plus, Search, UserRound } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router'
-import { TriageJobList } from '@/features/findbugs/triage-list'
+import { JobInbox } from '@/features/findbugs/job-inbox'
 import { cn } from '@/lib/utils'
 import { useAuth } from '../auth-context'
 import { openPalette } from '../palette-store'
 import { ThemeToggle } from '../theme-toggle'
 import { engineerNav, initials } from './nav'
-import { AccountSheet, DesignSwitcher, SystemBanners } from './shared'
+import { AccountSheet, SystemBanners } from './shared'
 
 const tabs = [
   { to: '/jobs', label: 'Investigasi', icon: Inbox },
@@ -32,10 +32,10 @@ function RailLink({ to, label, icon: Icon, end }: { to: string; label: string; i
 }
 
 /**
- * B · Triage (Sentry issues / Linear inbox): icon rail, the job list always
- * beside the detail pane, and on phones list → detail with a bottom tab bar.
+ * Icon rail, the job list always beside the detail pane (Sentry issues /
+ * Linear inbox style), and on phones list → detail with a bottom tab bar.
  */
-export function TriageShell({ children }: { children: ReactNode }) {
+export function AppShell({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth()
   const { pathname } = useLocation()
   const [account, setAccount] = useState(false)
@@ -72,7 +72,6 @@ export function TriageShell({ children }: { children: ReactNode }) {
             </>
           )}
           <div className="mt-auto grid justify-items-center gap-2">
-            <DesignSwitcher vertical className="border-white/10 bg-white/5 [&_button]:text-rail-foreground [&_button[aria-pressed=true]]:text-foreground" />
             <ThemeToggle className="px-2 text-rail-foreground hover:bg-white/10 [&>span]:hidden" />
             <button
               type="button"
@@ -89,7 +88,7 @@ export function TriageShell({ children }: { children: ReactNode }) {
 
         {withList && (
           <aside className={cn('min-h-0 w-full flex-col border-r bg-sidebar md:flex md:w-[300px] lg:w-[330px]', listOnly ? 'flex' : 'hidden')}>
-            <TriageJobList />
+            <JobInbox />
           </aside>
         )}
 
