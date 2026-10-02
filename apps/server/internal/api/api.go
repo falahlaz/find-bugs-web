@@ -223,11 +223,11 @@ func (a *API) buildStatus(active int) SystemStatus {
 	case v.Operator != "":
 		banners = append(banners, Banner{Level: "info", Action: "vpn", Message: v.Operator + " sedang menyambungkan VPN. Tunggu sebentar."})
 	case !v.Healthy:
-		banners = append(banners, Banner{Level: "error", Action: "vpn", Message: "VPN tidak tersambung. Job baru akan menunggu. Siapa pun bisa login ulang lewat panel VPN."})
+		banners = append(banners, Banner{Level: "error", Action: "vpn", Message: "VPN tidak tersambung. Job baru akan menunggu. Siapa pun bisa login ulang lewat halaman Koneksi."})
 	case s.Reauthing:
 		banners = append(banners, Banner{Level: "info", Action: "splunk", Message: "Login ulang Splunk sedang berjalan, menunggu approve 2FA di HP pemilik akun."})
 	case s.Paused:
-		banners = append(banners, Banner{Level: "error", Action: "splunk", Message: "Sesi Splunk kedaluwarsa. Antrean dijeda sampai ada yang klik Re-auth di panel Splunk."})
+		banners = append(banners, Banner{Level: "error", Action: "splunk", Message: "Sesi Splunk kedaluwarsa. Antrean dijeda sampai ada yang klik Re-auth di halaman Koneksi."})
 	}
 	return SystemStatus{VPN: v, Splunk: s, Queue: QueueSummary{Active: active, Max: a.Cfg.QueueMax}, Banners: banners}
 }

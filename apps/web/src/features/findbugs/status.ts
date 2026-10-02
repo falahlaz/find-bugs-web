@@ -11,7 +11,7 @@ export const statusInfo: Record<JobStatus, { label: string; tone: BadgeTone; hin
   SEARCHING: { label: 'Mencari log', tone: 'info' },
   ANALYZING: { label: 'Analisis AI', tone: 'info' },
   WAITING_VPN: { label: 'Menunggu VPN', tone: 'warning', hint: 'VPN sedang tidak tersambung. Job lanjut otomatis begitu ada yang login ulang VPN.' },
-  WAITING_SPLUNK: { label: 'Menunggu Splunk', tone: 'warning', hint: 'Sesi Splunk kedaluwarsa. Job lanjut otomatis setelah ada yang Re-auth di panel Splunk.' },
+  WAITING_SPLUNK: { label: 'Menunggu Splunk', tone: 'warning', hint: 'Sesi Splunk kedaluwarsa. Job lanjut otomatis setelah ada yang Re-auth di halaman Koneksi.' },
   DONE: { label: 'Selesai', tone: 'success' },
   NO_LOGS: { label: 'Log tidak ditemukan', tone: 'neutral' },
   FAILED: { label: 'Gagal', tone: 'danger' },

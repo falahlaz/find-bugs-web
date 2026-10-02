@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, unwrap } from '@/lib/api'
 
-const busyStates = ['CONNECTING', 'WAITING_CALLBACK', 'SUBMITTING']
+export const busyStates = ['CONNECTING', 'WAITING_CALLBACK', 'SUBMITTING']
 
 /** Live status (runs `globalprotect show --status` on the server). */
 export function useVpnStatus() {

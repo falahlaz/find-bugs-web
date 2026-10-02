@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from './auth-context'
+import { ThemeToggle } from './theme-toggle'
 
 export function LoginPage() {
   const { user, login } = useAuth()
@@ -31,7 +32,8 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-svh items-center justify-center bg-muted p-6">
+    <div className="relative flex min-h-svh items-center justify-center bg-muted p-6">
+      <ThemeToggle className="absolute top-4 right-4" />
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle className="text-xl">Find Bugs</CardTitle>

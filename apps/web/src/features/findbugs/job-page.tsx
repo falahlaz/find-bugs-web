@@ -83,7 +83,7 @@ export function JobPage() {
           {hint && (
             <Alert tone="warning">
               {hint}{' '}
-              <Link className="font-medium underline" to={status === 'WAITING_VPN' ? '/vpn' : '/splunk'}>
+              <Link className="font-medium underline" to={status === 'WAITING_VPN' ? '/koneksi#vpn' : '/koneksi#splunk'}>
                 Buka panel
               </Link>
             </Alert>

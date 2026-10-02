@@ -1,9 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createBrowserRouter, RouterProvider } from 'react-router'
 import { adminRoutes } from '@/features/admin/routes'
+import { connectionRoutes } from '@/features/connection/routes'
 import { findbugsRoutes } from '@/features/findbugs/routes'
-import { splunkRoutes } from '@/features/splunk/routes'
-import { vpnRoutes } from '@/features/vpn/routes'
 import { AuthProvider } from './auth'
 import { Layout } from './layout'
 import { LoginPage } from './login-page'
@@ -21,8 +20,7 @@ const router = createBrowserRouter([
     element: <Layout />,
     children: [
       ...findbugsRoutes,
-      ...vpnRoutes,
-      ...splunkRoutes,
+      ...connectionRoutes,
       ...adminRoutes,
       { path: '*', element: <NotFound /> },
     ],

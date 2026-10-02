@@ -140,7 +140,7 @@ func (m *Monitor) CheckVPN(ctx context.Context) bool {
 	case !s.Healthy && (was || !known):
 		slog.Warn("vpn down", "detail", detail)
 		m.reset("vpn-up")
-		m.notify.Notify(ctx, "vpn-down", "⚠️ VPN GlobalProtect putus atau sesi habis. Job baru menunggu sampai ada yang login ulang lewat panel VPN."+m.link())
+		m.notify.Notify(ctx, "vpn-down", "⚠️ VPN GlobalProtect putus atau sesi habis. Job baru menunggu sampai ada yang login ulang lewat halaman Koneksi."+m.link())
 	}
 	return s.Healthy
 }
@@ -256,7 +256,7 @@ func (m *Monitor) pauseSplunk(ctx context.Context, reason string) {
 	m.st.SplunkPaused, m.st.SplunkOK, m.st.SplunkDetail = true, false, reason
 	m.mu.Unlock()
 	if !was {
-		m.notify.Notify(ctx, "splunk-expired", fmt.Sprintf("⚠️ Sesi Splunk kedaluwarsa dan login otomatis gagal (%s). Antrean dijeda; klik Re-auth di panel Splunk.%s", reason, m.link()))
+		m.notify.Notify(ctx, "splunk-expired", fmt.Sprintf("⚠️ Sesi Splunk kedaluwarsa dan login otomatis gagal (%s). Antrean dijeda; klik Re-auth di halaman Koneksi.%s", reason, m.link()))
 	}
 }
 

@@ -267,7 +267,7 @@ func (w *Worker) searchFailure(parent, ctx context.Context, err error) string {
 		return cause.Error()
 	}
 	if errors.Is(err, splunk.ErrSessionExpired) || errors.Is(err, splunk.ErrNoSession) {
-		return "Sesi Splunk kedaluwarsa dan login ulang gagal. Antrean dijeda sampai ada yang Re-auth di panel Splunk."
+		return "Sesi Splunk kedaluwarsa dan login ulang gagal. Antrean dijeda sampai ada yang Re-auth di halaman Koneksi."
 	}
 	if !w.Monitor.CheckVPN(parent) {
 		return "VPN putus saat mencari log di Splunk. Sambungkan VPN lalu submit ulang."

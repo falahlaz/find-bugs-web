@@ -24,7 +24,7 @@ export function JobTimeline({ job, timeZone }: { job: JobView; timeZone: string 
               className={cn(
                 'mt-1 size-3 shrink-0 rounded-full border-2',
                 done && 'border-emerald-500 bg-emerald-500',
-                step.active && 'animate-pulse border-sky-500 bg-sky-200',
+                step.active && 'animate-pulse border-sky-500 bg-sky-200 dark:bg-sky-900',
                 !done && !step.active && 'border-muted-foreground/40',
               )}
             />

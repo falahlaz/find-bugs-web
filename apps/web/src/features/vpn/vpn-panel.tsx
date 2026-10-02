@@ -5,10 +5,11 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
+import { Row } from '@/components/ui/row'
 import { Textarea } from '@/components/ui/textarea'
 import { useTimezone } from '@/features/findbugs/queries'
 import { formatDateTime, formatDuration } from '@/lib/format'
-import { useLoginUrl, useVpnCallback, useVpnConnect, useVpnDisconnect, useVpnLogs, useVpnStatus } from './queries'
+import { busyStates, useLoginUrl, useVpnCallback, useVpnConnect, useVpnDisconnect, useVpnLogs, useVpnStatus } from './queries'
 
 const stateLabel: Record<string, string> = {
   IDLE: 'Idle',
@@ -19,16 +20,21 @@ const stateLabel: Record<string, string> = {
   FAILED: 'Gagal',
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+
+/** Connection badge(s); shared with the summary on the Koneksi page. */
+export function VpnBadge() {
+  const { data: s } = useVpnStatus()
+  if (!s) return null
+  const busy = busyStates.includes(s.state)
   return (
-    <div className="grid grid-cols-[10rem_1fr] gap-2 text-sm">
-      <div className="text-muted-foreground">{label}</div>
-      <div className="min-w-0 break-words">{children}</div>
-    </div>
+    <>
+      <Badge tone={s.healthy ? 'success' : 'danger'}>{s.healthy ? 'Tersambung' : 'Tidak tersambung'}</Badge>
+      {busy && <Badge tone="info">{stateLabel[s.state]}</Badge>}
+    </>
   )
 }
 
-export function VpnPage() {
+export function VpnPanel() {
   const { user } = useAuth()
   const tz = useTimezone()
   const status = useVpnStatus()
@@ -41,7 +47,7 @@ export function VpnPage() {
 
   const s = status.data
   const state = s?.state ?? 'IDLE'
-  const inProgress = state === 'CONNECTING' || state === 'WAITING_CALLBACK' || state === 'SUBMITTING'
+  const inProgress = busyStates.includes(state)
   const someoneElse = inProgress && s?.operator && s.operator !== user?.username
   const loginUrl = useLoginUrl(inProgress && !someoneElse)
   // The link is only meaningful during the current attempt.
@@ -57,8 +63,7 @@ export function VpnPage() {
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center gap-3">
           <CardTitle>VPN GlobalProtect</CardTitle>
-          {s && <Badge tone={s.healthy ? 'success' : 'danger'}>{s.healthy ? 'Tersambung' : 'Tidak tersambung'}</Badge>}
-          {inProgress && <Badge tone="info">{stateLabel[state]}</Badge>}
+          <VpnBadge />
           <span className="ml-auto text-xs text-muted-foreground">Satu sesi VPN dipakai bersama semua user.</span>
         </CardHeader>
         <CardContent className="grid gap-2">
@@ -75,7 +80,7 @@ export function VpnPage() {
                   ? '–'
                   : s.reach.map((r) => (
                       <span key={r.host} className="mr-3 inline-flex items-center gap-1">
-                        <span className={r.ok ? 'text-emerald-600' : 'text-destructive'}>{r.ok ? '●' : '○'}</span>
+                        <span className={r.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-destructive'}>{r.ok ? '●' : '○'}</span>
                         <span className="font-mono text-xs">{r.host}</span>
                       </span>
                     ))}
@@ -151,7 +156,7 @@ export function VpnPage() {
                 {callback.data && (
                   <Alert tone={callback.data.state === 'CONNECTED' ? 'info' : 'danger'}>
                     {callback.data.state === 'CONNECTED'
-                      ? 'Callback diterima GlobalProtect. Status di atas akan berubah jadi Tersambung dalam beberapa detik.'
+                      ? 'Callback diterima GlobalProtect. Status VPN akan berubah jadi Tersambung dalam beberapa detik.'
                       : `Callback gagal (exit ${callback.data.exitCode}). ${callback.data.stderr || callback.data.stdout}`}
                   </Alert>
                 )}
