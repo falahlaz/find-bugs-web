@@ -103,7 +103,7 @@ func serve() error {
 	}
 	wk := worker.New(st, sp, an, mon, notifier, worker.Config{
 		WaitingExpiry: cfg.WaitingExpiry, RecheckAfter: cfg.JobRecheckAfter, JobTimeout: cfg.JobTimeout, PublicURL: cfg.PublicURL,
-		LogDir: logDir(cfg),
+		LogDir: logDir(cfg), CorrelationMaxIDs: cfg.Splunk.CorrelationMaxIDs,
 	})
 	if err := wk.Recover(ctx); err != nil {
 		return err

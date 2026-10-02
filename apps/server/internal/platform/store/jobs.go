@@ -367,16 +367,19 @@ type Investigation struct {
 	ErrorSource     string   `json:"errorSource,omitempty"`
 	RawLogSnippet   string   `json:"rawLogSnippet,omitempty"`
 	LLMFailed       bool     `json:"llmFailed"`
+	// LinkedIDs are backend IDs whose logs were merged into the analysis.
+	LinkedIDs []string `json:"linkedIds"`
 }
 
 // SaveInvestigation inserts or replaces the investigation for a job.
 func (s *Store) SaveInvestigation(ctx context.Context, inv Investigation) error {
 	logs, _ := json.Marshal(nonNil(inv.RelevantLogs))
+	linked, _ := json.Marshal(nonNil(inv.LinkedIDs))
 	_, err := s.db.ExecContext(ctx, `INSERT OR REPLACE INTO investigations
-		(job_id, error_type, failed_component, severity, summary, likely_cause, suggested_action, relevant_logs, error_source, raw_log_snippet, llm_failed, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		(job_id, error_type, failed_component, severity, summary, likely_cause, suggested_action, relevant_logs, error_source, raw_log_snippet, llm_failed, linked_ids, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		inv.JobID, inv.ErrorType, inv.FailedComponent, inv.Severity, inv.Summary, inv.LikelyCause, inv.SuggestedAction,
-		string(logs), inv.ErrorSource, inv.RawLogSnippet, inv.LLMFailed, ts(s.now()))
+		string(logs), inv.ErrorSource, inv.RawLogSnippet, inv.LLMFailed, string(linked), ts(s.now()))
 	return err
 }
 
@@ -390,10 +393,10 @@ func nonNil(s []string) []string {
 // GetInvestigation loads the investigation for a job.
 func (s *Store) GetInvestigation(ctx context.Context, jobID int64) (Investigation, error) {
 	var inv Investigation
-	var et, fc, sev, sum, lc, sa, logs, src, raw sql.NullString
+	var et, fc, sev, sum, lc, sa, logs, src, raw, linked sql.NullString
 	err := s.db.QueryRowContext(ctx, `SELECT job_id, error_type, failed_component, severity, summary, likely_cause, suggested_action,
-		relevant_logs, error_source, raw_log_snippet, llm_failed FROM investigations WHERE job_id = ?`, jobID).
-		Scan(&inv.JobID, &et, &fc, &sev, &sum, &lc, &sa, &logs, &src, &raw, &inv.LLMFailed)
+		relevant_logs, error_source, raw_log_snippet, llm_failed, linked_ids FROM investigations WHERE job_id = ?`, jobID).
+		Scan(&inv.JobID, &et, &fc, &sev, &sum, &lc, &sa, &logs, &src, &raw, &inv.LLMFailed, &linked)
 	if errors.Is(err, sql.ErrNoRows) {
 		return inv, ErrNotFound
 	}
@@ -406,6 +409,10 @@ func (s *Store) GetInvestigation(ctx context.Context, jobID int64) (Investigatio
 		_ = json.Unmarshal([]byte(logs.String), &inv.RelevantLogs)
 	}
 	inv.RelevantLogs = nonNil(inv.RelevantLogs)
+	if linked.Valid {
+		_ = json.Unmarshal([]byte(linked.String), &inv.LinkedIDs)
+	}
+	inv.LinkedIDs = nonNil(inv.LinkedIDs)
 	return inv, nil
 }
 

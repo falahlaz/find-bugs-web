@@ -428,7 +428,7 @@ func (a *API) jobView(ctx context.Context, u store.User, j store.Job) (JobView, 
 // severity and a message based on the error source; engineers get everything.
 func shapeResult(u store.User, inv store.Investigation) *Result {
 	label, msg := sourceText(inv.ErrorSource)
-	res := &Result{Summary: inv.Summary, Severity: inv.Severity, ErrorSource: inv.ErrorSource, SourceLabel: label, QAMessage: msg, LLMFailed: inv.LLMFailed}
+	res := &Result{Summary: inv.Summary, Severity: inv.Severity, ErrorSource: inv.ErrorSource, SourceLabel: label, QAMessage: msg, LLMFailed: inv.LLMFailed, LinkedIDs: inv.LinkedIDs}
 	if inv.LLMFailed {
 		res.QAMessage = "Tim engineering sedang meninjau log secara manual dan akan menindaklanjuti."
 	}

@@ -287,6 +287,15 @@ func (c *Client) Search(ctx context.Context, env, txn, timeRange string) (Result
 	if err != nil {
 		return Result{}, err
 	}
+	logs := RenderLogs(events)
+	if strings.TrimSpace(logs) == "" {
+		return Result{Status: ResultNoLogs}, nil
+	}
+	return Result{Status: ResultSuccess, Logs: logs, Events: events, EventCount: count, Truncated: count > max}, nil
+}
+
+// RenderLogs renders events as "[_time] _raw" lines.
+func RenderLogs(events []Event) string {
 	lines := make([]string, 0, len(events))
 	for _, ev := range events {
 		if ev.Time != "" {
@@ -295,11 +304,7 @@ func (c *Client) Search(ctx context.Context, env, txn, timeRange string) (Result
 			lines = append(lines, ev.Raw)
 		}
 	}
-	logs := strings.Join(lines, "\n")
-	if strings.TrimSpace(logs) == "" {
-		return Result{Status: ResultNoLogs}, nil
-	}
-	return Result{Status: ResultSuccess, Logs: logs, Events: events, EventCount: count, Truncated: count > max}, nil
+	return strings.Join(lines, "\n")
 }
 
 func (c *Client) createJob(ctx context.Context, q, timeRange string) (string, error) {

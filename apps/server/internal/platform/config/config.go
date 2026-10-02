@@ -65,6 +65,9 @@ type Splunk struct {
 	ResultWaitTimeout time.Duration
 	PollInterval      time.Duration
 	MaxLogLines       int
+	// CorrelationMaxIDs caps how many backend IDs linked to the searched
+	// transaction ID are re-searched; 0 disables it.
+	CorrelationMaxIDs int
 	LoginCommand      []string
 	LoginTimeout      time.Duration
 }
@@ -206,6 +209,7 @@ func Load(full bool) (Config, error) {
 		ResultWaitTimeout: time.Duration(l.int("SPLUNK_RESULT_WAIT_TIMEOUT", 30)) * time.Second,
 		PollInterval:      time.Duration(l.int("SPLUNK_POLL_INTERVAL", 2)) * time.Second,
 		MaxLogLines:       l.int("MAX_LOG_LINES", 5000),
+		CorrelationMaxIDs: l.int("SPLUNK_CORRELATION_MAX_IDS", 5),
 		LoginCommand:      strings.Fields(l.str("SPLUNK_LOGIN_CMD", "xvfb-run -a python3 scripts/splunk-login/save_session_auto.py")),
 		LoginTimeout:      l.dur("SPLUNK_LOGIN_TIMEOUT", 6*time.Minute),
 	}
