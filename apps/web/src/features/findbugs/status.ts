@@ -24,9 +24,21 @@ export const allStatuses = Object.keys(statusInfo) as JobStatus[]
 const finals: JobStatus[] = ['DONE', 'NO_LOGS', 'FAILED', 'CANCELLED', 'EXPIRED']
 export const isFinal = (s: JobStatus) => finals.includes(s)
 export const isPending = (s: JobStatus) => s === 'QUEUED' || s === 'WAITING_VPN' || s === 'WAITING_SPLUNK'
+export const isRunning = (s: JobStatus) => s === 'CHECKING_VPN' || s === 'SEARCHING' || s === 'ANALYZING'
+export const isTrouble = (s: JobStatus) => s === 'FAILED' || s === 'EXPIRED'
+
+/** Colour for the stripe/dot that summarises a job in lists. */
+export function jobTone(status: JobStatus, severity?: string): BadgeTone {
+  if (severity) return severityTone[severity] ?? 'neutral'
+  if (isTrouble(status)) return 'danger'
+  if (status === 'DONE') return 'success'
+  if (isRunning(status)) return 'info'
+  if (status === 'WAITING_VPN' || status === 'WAITING_SPLUNK') return 'warning'
+  return 'neutral'
+}
 
 export const severityTone: Record<string, BadgeTone> = {
-  low: 'neutral',
+  low: 'success',
   medium: 'warning',
   high: 'danger',
   critical: 'danger',

@@ -15,6 +15,7 @@ docs/          PRD
 - **Fase 1 (pipeline headless):** selesai. Semua endpoint API jalan dan teruji.
 - **Fase 2 (website QA):** selesai. Login, form submit (transaction ID/curl, environment, 24h/48h), deteksi duplikat 24 jam dengan "Jalankan ulang", halaman job dengan progres per tahap (polling 2,5 detik), hasil QA vs laporan engineer, batalkan job yang masih antre, histori dengan filter, dan notifikasi browser saat job selesai.
 - **Fase 3 (panel VPN, Splunk, Engineer):** selesai. Halaman Koneksi (`/koneksi`) menggabungkan VPN dan Splunk berurutan: VPN untuk semua user (Connect, link login SSO, paste callback, Disconnect, status nyata, log diredaksi), lalu Splunk (status sesi, Re-auth dengan status menunggu 2FA, output login terakhir), manajemen user dan audit log untuk Engineer.
+- **Revamp UI (eksplorasi):** tiga desain hidup berdampingan dan bisa diganti lewat switcher A/B/C di aplikasi (atau `?design=command|triage|bento`): **A · Command** (sidebar ringkas, Ctrl/⌘+K, floating dock di HP), **B · Triage** (daftar job selalu di samping detail, health strip VPN/Splunk, tab bar di HP; default), **C · Bento Live** (beranda tile, ring progres, FAB + bottom sheet di HP). Semua memakai hook dan API yang sama; token warna/font per desain ada di `apps/web/src/index.css`.
 - **Fase 4 (deploy & cut-over):** ikuti bagian Deploy di bawah, lalu uji di VM dengan GlobalProtect, Splunk, dan Claude Code asli.
 
 ## Development

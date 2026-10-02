@@ -1,82 +1,27 @@
-import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router'
-import { Button } from '@/components/ui/button'
-import { cn } from '@/lib/utils'
+import { Navigate, Outlet, useLocation } from 'react-router'
 import { useAuth } from './auth-context'
-import { ThemeToggle } from './theme-toggle'
-import { useSystemStatus } from './use-system-status'
+import { CommandPalette } from './command-palette'
+import { useDesign } from './design'
+import { BentoShell } from './shell/bento-shell'
+import { CommandShell } from './shell/command-shell'
+import { TriageShell } from './shell/triage-shell'
 
-const nav = [
-  { to: '/', label: 'Submit', end: true },
-  { to: '/jobs', label: 'Histori' },
-  { to: '/koneksi', label: 'Koneksi' },
-]
-
-function Banners() {
-  const { data } = useSystemStatus()
-  if (!data?.banners.length) return null
-  return (
-    <div className="flex flex-col">
-      {data.banners.map((b) => (
-        <div
-          key={b.message}
-          className={cn(
-            'px-6 py-2 text-sm',
-            b.level === 'error' && 'bg-destructive/10 text-destructive',
-            b.level === 'warning' && 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200',
-            b.level === 'info' && 'bg-secondary text-secondary-foreground',
-          )}
-        >
-          {b.message}{' '}
-          {b.action && (
-            <Link to={`/koneksi#${b.action}`} className="font-medium underline">
-              Buka halaman Koneksi
-            </Link>
-          )}
-        </div>
-      ))}
-    </div>
-  )
-}
+const shells = { command: CommandShell, triage: TriageShell, bento: BentoShell }
 
 export function Layout() {
-  const { user, loading, logout } = useAuth()
+  const { user, loading } = useAuth()
+  const { design } = useDesign()
   const location = useLocation()
   if (loading) return <div className="p-6 text-muted-foreground">Memuat…</div>
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />
 
-  const items = user.role === 'engineer' ? [...nav, { to: '/users', label: 'User' }, { to: '/audit', label: 'Audit' }] : nav
+  const Shell = shells[design]
   return (
-    <div className="min-h-svh">
-      <header className="flex items-center gap-6 border-b px-6 py-3">
-        <span className="font-semibold">Find Bugs</span>
-        <nav className="flex gap-1">
-          {items.map((n) => (
-            <NavLink
-              key={n.to}
-              to={n.to}
-              end={n.end}
-              className={({ isActive }) =>
-                cn('rounded-md px-3 py-1.5 text-sm', isActive ? 'bg-secondary font-medium' : 'text-muted-foreground hover:text-foreground')
-              }
-            >
-              {n.label}
-            </NavLink>
-          ))}
-        </nav>
-        <div className="ml-auto flex items-center gap-3 text-sm">
-          <ThemeToggle />
-          <span className="text-muted-foreground">
-            {user.username} · {user.role === 'engineer' ? 'Engineer' : 'QA'}
-          </span>
-          <Button variant="outline" size="sm" onClick={() => void logout()}>
-            Keluar
-          </Button>
-        </div>
-      </header>
-      <Banners />
-      <main className="mx-auto max-w-5xl p-6">
+    <>
+      <Shell>
         <Outlet />
-      </main>
-    </div>
+      </Shell>
+      <CommandPalette />
+    </>
   )
 }
