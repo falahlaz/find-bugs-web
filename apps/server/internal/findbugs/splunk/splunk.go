@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -48,8 +49,24 @@ const (
 // Result is a finished search.
 type Result struct {
 	Status string
-	Logs   string
+	// Logs is Events rendered as "[_time] _raw" lines, oldest first.
+	Logs string
+	// Events are the fetched events, oldest first.
+	Events []Event
+	// EventCount is how many events the search matched; Truncated is set
+	// when that is more than MaxLogLines and only the newest were fetched.
+	EventCount int
+	Truncated  bool
 }
+
+// Event is one Splunk event.
+type Event struct {
+	Time string
+	Raw  string
+}
+
+// eventsPageSize is how many events are requested per /events call.
+const eventsPageSize = 1000
 
 type sessionFile struct {
 	BaseURL   string            `json:"base_url"`
@@ -258,14 +275,27 @@ func (c *Client) Search(ctx context.Context, env, txn, timeRange string) (Result
 	if count == 0 {
 		return Result{Status: ResultNoLogs}, nil
 	}
-	logs, err := c.events(ctx, sid)
+	max := c.cfg.MaxLogLines
+	if max <= 0 {
+		max = 5000
+	}
+	events, err := c.events(ctx, sid, min(count, max))
 	if err != nil {
 		return Result{}, err
 	}
+	lines := make([]string, 0, len(events))
+	for _, ev := range events {
+		if ev.Time != "" {
+			lines = append(lines, fmt.Sprintf("[%s] %s", ev.Time, ev.Raw))
+		} else {
+			lines = append(lines, ev.Raw)
+		}
+	}
+	logs := strings.Join(lines, "\n")
 	if strings.TrimSpace(logs) == "" {
 		return Result{Status: ResultNoLogs}, nil
 	}
-	return Result{Status: ResultSuccess, Logs: logs}, nil
+	return Result{Status: ResultSuccess, Logs: logs, Events: events, EventCount: count, Truncated: count > max}, nil
 }
 
 func (c *Client) createJob(ctx context.Context, q, timeRange string) (string, error) {
@@ -357,44 +387,48 @@ func (f *field) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-func (c *Client) events(ctx context.Context, sid string) (string, error) {
-	max := c.cfg.MaxLogLines
-	if max <= 0 {
-		max = 100
-	}
-	q := url.Values{
-		"output_mode":  {"json"},
-		"offset":       {"0"},
-		"count":        {fmt.Sprint(max)},
-		"field_list":   {"_raw,_time,source,sourcetype,host"},
-		"max_lines":    {"0"},
-		"segmentation": {"none"},
-	}
-	resp, err := c.do(ctx, http.MethodGet, "/services/search/v2/jobs/"+url.PathEscape(sid)+"/events", nil, q)
-	if err != nil {
-		return "", err
-	}
-	var out struct {
-		Results []struct {
-			Raw  field `json:"_raw"`
-			Time field `json:"_time"`
-		} `json:"results"`
-	}
-	if err := readJSON(resp, []int{200}, &out); err != nil {
-		return "", fmt.Errorf("get events: %w", err)
-	}
-	lines := make([]string, 0, len(out.Results))
-	for _, ev := range out.Results {
-		if ev.Raw == "" {
-			continue
+// events fetches up to want events page by page. Splunk returns the newest
+// first; the result is reversed so it reads oldest first.
+func (c *Client) events(ctx context.Context, sid string, want int) ([]Event, error) {
+	var events []Event
+	for offset := 0; offset < want; offset += eventsPageSize {
+		q := url.Values{
+			"output_mode":  {"json"},
+			"offset":       {fmt.Sprint(offset)},
+			"count":        {fmt.Sprint(min(eventsPageSize, want-offset))},
+			"field_list":   {"_raw,_time,source,sourcetype,host"},
+			"max_lines":    {"0"},
+			"segmentation": {"none"},
 		}
-		if ev.Time != "" && ev.Time != "0" {
-			lines = append(lines, fmt.Sprintf("[%s] %s", ev.Time, ev.Raw))
-		} else {
-			lines = append(lines, string(ev.Raw))
+		resp, err := c.do(ctx, http.MethodGet, "/services/search/v2/jobs/"+url.PathEscape(sid)+"/events", nil, q)
+		if err != nil {
+			return nil, err
+		}
+		var out struct {
+			Results []struct {
+				Raw  field `json:"_raw"`
+				Time field `json:"_time"`
+			} `json:"results"`
+		}
+		if err := readJSON(resp, []int{200}, &out); err != nil {
+			return nil, fmt.Errorf("get events: %w", err)
+		}
+		for _, ev := range out.Results {
+			if ev.Raw == "" {
+				continue
+			}
+			t := string(ev.Time)
+			if t == "0" {
+				t = ""
+			}
+			events = append(events, Event{Time: t, Raw: string(ev.Raw)})
+		}
+		if len(out.Results) < min(eventsPageSize, want-offset) {
+			break
 		}
 	}
-	return strings.Join(lines, "\n"), nil
+	slices.Reverse(events)
+	return events, nil
 }
 
 func (c *Client) cleanup(sid string) {

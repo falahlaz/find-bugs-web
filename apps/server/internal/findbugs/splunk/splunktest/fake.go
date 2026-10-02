@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -21,9 +22,11 @@ type Fake struct {
 	Searches  []string
 	Cancelled []string
 	Cookie    string // last Cookie header
-	FormKey   string // last X-Splunk-Form-Key header
-	seq       int
-	jobs      map[string]string
+	// EventPages counts /events requests.
+	EventPages int
+	FormKey    string // last X-Splunk-Form-Key header
+	seq        int
+	jobs       map[string]string
 }
 
 // New returns a Fake with no logs.
@@ -80,9 +83,14 @@ func (f *Fake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, map[string]any{})
 	case strings.HasSuffix(p, "/events"):
 		sid := strings.TrimSuffix(strings.TrimPrefix(p, "/services/search/v2/jobs/"), "/events")
-		var res []any
-		for i, l := range f.match(f.jobs[sid]) {
-			res = append(res, map[string]any{"_raw": map[string]string{"value": l}, "_time": fmt.Sprintf("2026-10-01T08:00:0%d", i)})
+		// Like Splunk: newest first, paged by offset/count.
+		lines := f.match(f.jobs[sid])
+		offset, _ := strconv.Atoi(r.URL.Query().Get("offset"))
+		count, _ := strconv.Atoi(r.URL.Query().Get("count"))
+		f.EventPages++
+		res := []any{}
+		for i := len(lines) - 1 - offset; i >= 0 && (count <= 0 || len(res) < count); i-- {
+			res = append(res, map[string]any{"_raw": map[string]string{"value": lines[i]}, "_time": fmt.Sprintf("2026-10-01T08:%02d:%02d", i/60%60, i%60)})
 		}
 		writeJSON(w, map[string]any{"results": res})
 	case strings.HasPrefix(p, "/services/search/v2/jobs/"):

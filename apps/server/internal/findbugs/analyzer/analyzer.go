@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -29,18 +30,19 @@ type Diagnosis struct {
 	ErrorSource     string   `json:"error_source"`
 }
 
-// Analyzer produces a Diagnosis for a transaction's logs. Logs passed in are
-// already redacted.
+// Analyzer produces a Diagnosis for a transaction's logs. logPath is a file
+// holding every fetched event, already redacted.
 type Analyzer interface {
-	Analyze(ctx context.Context, transactionID, logs string) (Diagnosis, error)
+	Analyze(ctx context.Context, transactionID, logPath string) (Diagnosis, error)
 }
 
-// MaxPromptLogChars caps the log text sent to the model.
-const MaxPromptLogChars = 80000
+// LogFileName is the name the log file gets in the model's working directory.
+const LogFileName = "logs.txt"
 
 // SystemPrompt is the instruction given to the model.
 const SystemPrompt = `You are a backend debugging assistant for a software engineering team.
-You will receive raw application logs from a production system, identified by a transaction ID.
+The raw application logs for one transaction ID are in the file ./logs.txt in your working directory.
+You can only use the Read, Grep and Glob tools, and only inside that directory.
 Your job is to:
 1. Identify the log lines that are most relevant to the error or failure (error-level logs, exception traces, failed API calls, validation failures)
 2. Provide a diagnosis based on those relevant logs
@@ -75,12 +77,11 @@ Respond with a single JSON object only, no markdown and no other text.`
 
 const userPromptTemplate = `Transaction ID: %s
 
-Raw logs:
----
-%s
----
+The logs are in ./logs.txt (%s). The file starts with a header (event count, and whether the search hit the event limit), then one block per event, oldest first: "#<n> [<time>]" followed by the raw event (JSON events are pretty-printed).
 
-Analyze the logs above and respond in the following JSON format only, no other text:
+Read the whole file before answering, in chunks with offset/limit if it is large. If it is too large to read completely, first Grep it for errors (e.g. "error|exception|fail|timeout|ESB|TIBCO|status.{0,4}[45][0-9][0-9]"), then Read the events around every match and the first and last events of the transaction. Base the diagnosis on the whole flow, not just the last error.
+
+Analyze the logs and respond in the following JSON format only, no other text:
 
 {
   "summary": "one or two sentence description of what happened",
@@ -93,12 +94,22 @@ Analyze the logs above and respond in the following JSON format only, no other t
   "error_source": "esb | tibco | internal | unknown"
 }
 
-In "relevant_logs", include ONLY the exact log lines (verbatim from the raw logs) that are most critical to understanding the error — error-level logs, exceptions, failed calls, validation failures. Max 10 lines. Do not paraphrase or rewrite them.
+In "relevant_logs", include ONLY the exact log lines (verbatim from logs.txt, without the line-number prefix the Read tool adds) that are most critical to understanding the error — error-level logs, exceptions, failed calls, validation failures. Max 10 lines. Do not paraphrase or rewrite them.
 If no relevant logs are found (e.g. only info-level logs with no errors), set relevant_logs to an empty array [] and set likely_cause to "Insufficient log detail".`
 
-// UserPrompt renders the per-job prompt.
-func UserPrompt(transactionID, logs string) string {
-	return fmt.Sprintf(userPromptTemplate, transactionID, redact.Logs(logs, MaxPromptLogChars))
+// UserPrompt renders the per-job prompt for a log file of size bytes.
+func UserPrompt(transactionID string, size int64) string {
+	return fmt.Sprintf(userPromptTemplate, transactionID, humanSize(size))
+}
+
+func humanSize(n int64) string {
+	switch {
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1f MB", float64(n)/(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%d KB", n>>10)
+	}
+	return fmt.Sprintf("%d bytes", n)
 }
 
 // Parse extracts and validates a Diagnosis from model text (tolerating code
@@ -139,8 +150,10 @@ func normalize(v string, allowed ...string) string {
 	return ""
 }
 
-// ClaudeCode runs the Claude Code CLI in headless print mode with every tool
-// disabled, so the model can only read the prompt and answer.
+// ClaudeCode runs the Claude Code CLI in headless print mode in an empty
+// directory holding only the log file. Only the read-only Read, Grep and Glob
+// tools exist, and dontAsk mode denies anything outside that directory, so a
+// prompt injected through the logs cannot reach other files.
 type ClaudeCode struct {
 	Bin     string
 	Model   string
@@ -153,7 +166,8 @@ func (c ClaudeCode) Args() []string {
 		"-p",
 		"--model", c.Model,
 		"--output-format", "json",
-		"--tools", "",
+		"--tools", "Read,Grep,Glob",
+		"--permission-mode", "dontAsk",
 		"--strict-mcp-config",
 		"--setting-sources", "",
 		"--no-session-persistence",
@@ -162,19 +176,27 @@ func (c ClaudeCode) Args() []string {
 }
 
 // Analyze implements Analyzer.
-func (c ClaudeCode) Analyze(ctx context.Context, transactionID, logs string) (Diagnosis, error) {
+func (c ClaudeCode) Analyze(ctx context.Context, transactionID, logPath string) (Diagnosis, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.Timeout)
 	defer cancel()
-	// Run in an empty directory so no project CLAUDE.md or files are picked up.
+	// Run in a fresh directory holding only the logs, so no project CLAUDE.md
+	// or other files are picked up.
 	dir, err := os.MkdirTemp("", "fbw-claude-")
 	if err != nil {
 		return Diagnosis{}, err
 	}
 	defer os.RemoveAll(dir)
+	logs, err := os.ReadFile(logPath)
+	if err != nil {
+		return Diagnosis{}, err
+	}
+	if err := os.WriteFile(filepath.Join(dir, LogFileName), logs, 0o600); err != nil {
+		return Diagnosis{}, err
+	}
 
 	cmd := exec.CommandContext(ctx, c.Bin, c.Args()...)
 	cmd.Dir = dir
-	cmd.Stdin = strings.NewReader(UserPrompt(transactionID, logs))
+	cmd.Stdin = strings.NewReader(UserPrompt(transactionID, int64(len(logs))))
 	// Own process group so a timeout kills claude and anything it spawned.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
@@ -209,19 +231,23 @@ func tail(s string) string {
 	return redact.Sensitive(s)
 }
 
-// Fake returns a canned diagnosis built from the first ERROR line (local dev
-// and tests).
+// Fake returns a canned diagnosis built from the ERROR lines of the log file
+// (local dev and tests).
 type Fake struct {
 	Err error
 }
 
 // Analyze implements Analyzer.
-func (f Fake) Analyze(_ context.Context, transactionID, logs string) (Diagnosis, error) {
+func (f Fake) Analyze(_ context.Context, transactionID, logPath string) (Diagnosis, error) {
 	if f.Err != nil {
 		return Diagnosis{}, f.Err
 	}
+	logs, err := os.ReadFile(logPath)
+	if err != nil {
+		return Diagnosis{}, err
+	}
 	var rel []string
-	for _, l := range strings.Split(logs, "\n") {
+	for _, l := range strings.Split(string(logs), "\n") {
 		if strings.Contains(strings.ToUpper(l), "ERROR") {
 			rel = append(rel, l)
 		}

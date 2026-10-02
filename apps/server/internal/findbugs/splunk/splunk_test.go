@@ -3,6 +3,7 @@ package splunk
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -132,5 +133,40 @@ J
 	}
 	if info := c.Info(); info.LastReauthOK == nil || *info.LastReauthOK {
 		t.Errorf("info after failure = %+v", info)
+	}
+}
+
+func TestSearchPagesOldestFirst(t *testing.T) {
+	fake := splunktest.New()
+	lines := make([]string, 2500)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("event %04d", i)
+	}
+	fake.SetLogs("abc-1", lines...)
+	srv := httptest.NewServer(fake)
+	defer srv.Close()
+	c, cfg := newClient(t, srv.URL)
+	writeSession(t, cfg.SessionPath)
+	if err := c.Load(); err != nil {
+		t.Fatal(err)
+	}
+	c.cfg.MaxLogLines = 5000
+
+	res, err := c.Search(context.Background(), "prod", "abc-1", "24h")
+	if err != nil || res.EventCount != 2500 || res.Truncated || len(res.Events) != 2500 || fake.EventPages != 3 {
+		t.Fatalf("Search = count %d truncated %v events %d pages %d, %v", res.EventCount, res.Truncated, len(res.Events), fake.EventPages, err)
+	}
+	if res.Events[0].Raw != "event 0000" || res.Events[2499].Raw != "event 2499" {
+		t.Errorf("not oldest first: %q … %q", res.Events[0].Raw, res.Events[2499].Raw)
+	}
+
+	// Over the cap: only the newest MaxLogLines, still oldest first.
+	c.cfg.MaxLogLines = 1200
+	res, err = c.Search(context.Background(), "prod", "abc-1", "24h")
+	if err != nil || !res.Truncated || res.EventCount != 2500 || len(res.Events) != 1200 {
+		t.Fatalf("capped Search = count %d truncated %v events %d, %v", res.EventCount, res.Truncated, len(res.Events), err)
+	}
+	if res.Events[0].Raw != "event 1300" || res.Events[1199].Raw != "event 2499" {
+		t.Errorf("capped range: %q … %q", res.Events[0].Raw, res.Events[1199].Raw)
 	}
 }

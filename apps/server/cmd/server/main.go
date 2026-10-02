@@ -103,6 +103,7 @@ func serve() error {
 	}
 	wk := worker.New(st, sp, an, mon, notifier, worker.Config{
 		WaitingExpiry: cfg.WaitingExpiry, RecheckAfter: cfg.JobRecheckAfter, JobTimeout: cfg.JobTimeout, PublicURL: cfg.PublicURL,
+		LogDir: logDir(cfg),
 	})
 	if err := wk.Recover(ctx); err != nil {
 		return err
@@ -168,6 +169,11 @@ func maintenance(ctx context.Context, st *store.Store, cfg config.Config) {
 			} else if n > 0 {
 				slog.Info("retention: raw logs purged", "count", n)
 			}
+			if n, err := worker.PurgeLogFiles(logDir(cfg), now.Add(-cfg.RetainRawLogs)); err != nil {
+				slog.Error("retention log files", "err", err)
+			} else if n > 0 {
+				slog.Info("retention: log files purged", "count", n)
+			}
 			if n, err := st.PurgeDiagnoses(ctx, now.Add(-cfg.RetainDiagnosis)); err != nil {
 				slog.Error("retention diagnoses", "err", err)
 			} else if n > 0 {
@@ -189,6 +195,9 @@ func envOr(k, def string) string {
 	}
 	return def
 }
+
+// logDir holds the per-job Splunk result files, next to the database.
+func logDir(cfg config.Config) string { return dirOf(cfg.DBPath) + "/logs" }
 
 func dirOf(p string) string {
 	if i := strings.LastIndex(p, "/"); i > 0 {

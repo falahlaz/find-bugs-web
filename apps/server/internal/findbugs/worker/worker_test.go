@@ -3,6 +3,7 @@ package worker
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -10,6 +11,7 @@ import (
 	"sync"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/analyzer"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/jobs"
@@ -74,7 +76,7 @@ func setup(t *testing.T, a analyzer.Analyzer) *env {
 	v := &fakeVPN{healthy: true}
 	mon := watchdog.New(v, sp, nil, "")
 	mon.CheckVPN(ctx)
-	w := New(st, sp, a, mon, nil, Config{WaitingExpiry: time.Hour, JobTimeout: 10 * time.Second})
+	w := New(st, sp, a, mon, nil, Config{WaitingExpiry: time.Hour, JobTimeout: 10 * time.Second, LogDir: filepath.Join(dir, "logs")})
 	u, _ := st.CreateUser(ctx, "qa", "h", store.RoleQA)
 	o, _ := st.CreateUser(ctx, "eng", "h", store.RoleEngineer)
 	svc := &jobs.Service{Store: st, Environments: []string{"prod"}, Header: "X-Transaction-ID",
@@ -275,5 +277,61 @@ func TestSubmitValidation(t *testing.T) {
 	var le *jobs.LimitError
 	if _, _, err := e.svc.Submit(ctx, e.user, jobs.SubmitRequest{Environment: "prod", TimeRange: "24h", Input: "td", Force: true}); !errors.As(err, &le) {
 		t.Errorf("limit err = %v", err)
+	}
+}
+
+type recordingAnalyzer struct{ path *string }
+
+func (r recordingAnalyzer) Analyze(_ context.Context, txn, path string) (analyzer.Diagnosis, error) {
+	*r.path = path
+	return analyzer.Diagnosis{Summary: "ok " + txn, RelevantLogs: []string{}}, nil
+}
+
+func TestAnalyzerReadsFullLogFile(t *testing.T) {
+	var path string
+	e := setup(t, recordingAnalyzer{&path})
+	long := "<html>" + strings.Repeat("é", 3000) + "</html>"
+	e.fake.SetLogs("abc-1", `{"level":"info","msg":"start"}`, "ERROR mid user a@b.com "+long, `{"level":"error","status":503}`)
+	j := e.submit(t, "abc-1")
+	e.step(t)
+	if got := e.job(t, j.ID); got.Status != store.StatusDone {
+		t.Fatalf("job = %+v", got)
+	}
+	if path != filepath.Join(e.w.Cfg.LogDir, fmt.Sprintf("job-%d.log", j.ID)) {
+		t.Fatalf("analyzer got %q", path)
+	}
+	fi, err := os.Stat(path)
+	if err != nil || fi.Mode().Perm() != 0o600 {
+		t.Fatalf("log file: %v %v", fi, err)
+	}
+	b, _ := os.ReadFile(path)
+	text := string(b)
+	for _, want := range []string{"Transaction ID: abc-1", "Events: 3 (oldest first)", "#1 [", "\"msg\": \"start\"", "#3 [", "\"status\": 503"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("log file missing %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "a@b.com") {
+		t.Errorf("log file not redacted:\n%s", text)
+	}
+	for _, l := range strings.Split(text, "\n") {
+		if len(l) > maxLineChars || !utf8.ValidString(l) {
+			t.Fatalf("line not wrapped on a rune boundary: len %d", len(l))
+		}
+	}
+	if !strings.Contains(strings.ReplaceAll(text, "\n", ""), long) {
+		t.Errorf("wrapped event lost content")
+	}
+	if strings.Index(text, "start") > strings.Index(text, "503") {
+		t.Errorf("events not oldest first:\n%s", text)
+	}
+
+	old := time.Now().Add(-48 * time.Hour)
+	os.Chtimes(path, old, old)
+	if n, err := PurgeLogFiles(e.w.Cfg.LogDir, time.Now().Add(-24*time.Hour)); err != nil || n != 1 {
+		t.Fatalf("PurgeLogFiles = %d, %v", n, err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("log file not purged: %v", err)
 	}
 }
