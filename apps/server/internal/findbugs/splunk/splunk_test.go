@@ -159,6 +159,9 @@ func TestSearchPagesOldestFirst(t *testing.T) {
 	if res.Events[0].Raw != "event 0000" || res.Events[2499].Raw != "event 2499" {
 		t.Errorf("not oldest first: %q … %q", res.Events[0].Raw, res.Events[2499].Raw)
 	}
+	if e := res.Events[0]; e.Host != "fake-host" || e.Source != "fake-service" || e.SourceType != "_json" {
+		t.Errorf("metadata = host %q source %q sourcetype %q", e.Host, e.Source, e.SourceType)
+	}
 
 	// Over the cap: only the newest MaxLogLines, still oldest first.
 	c.cfg.MaxLogLines = 1200

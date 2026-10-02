@@ -396,3 +396,18 @@ func TestMergeResultsDedupesAndSorts(t *testing.T) {
 		t.Errorf("logs = %q", got.Logs)
 	}
 }
+
+func TestFormatLogFileEventMeta(t *testing.T) {
+	job := store.Job{TransactionID: "T1", Environment: "dev", TimeRange: "24h"}
+	res := splunk.Result{Events: []splunk.Event{
+		{Time: "t1", Raw: "with meta", Host: "pod-1", Source: "payment-service", SourceType: "kube:container"},
+		{Time: "t2", Raw: "no meta"},
+	}}
+	got := formatLogFile(job, res, nil)
+	if !strings.Contains(got, "#1 [t1]\nhost=pod-1 source=payment-service sourcetype=kube:container\nwith meta\n") {
+		t.Errorf("event with metadata:\n%s", got)
+	}
+	if !strings.Contains(got, "#2 [t2]\nno meta\n") {
+		t.Errorf("event without metadata:\n%s", got)
+	}
+}

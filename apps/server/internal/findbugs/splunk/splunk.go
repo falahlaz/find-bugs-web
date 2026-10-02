@@ -59,10 +59,15 @@ type Result struct {
 	Truncated  bool
 }
 
-// Event is one Splunk event.
+// Event is one Splunk event. Host, Source and SourceType are Splunk's
+// metadata fields; they name the service that wrote the event, which _raw
+// does not.
 type Event struct {
-	Time string
-	Raw  string
+	Time       string
+	Raw        string
+	Host       string
+	Source     string
+	SourceType string
 }
 
 // eventsPageSize is how many events are requested per /events call.
@@ -415,8 +420,11 @@ func (c *Client) events(ctx context.Context, sid string, want int) ([]Event, err
 		}
 		var out struct {
 			Results []struct {
-				Raw  field `json:"_raw"`
-				Time field `json:"_time"`
+				Raw        field `json:"_raw"`
+				Time       field `json:"_time"`
+				Host       field `json:"host"`
+				Source     field `json:"source"`
+				SourceType field `json:"sourcetype"`
 			} `json:"results"`
 		}
 		if err := readJSON(resp, []int{200}, &out); err != nil {
@@ -430,7 +438,10 @@ func (c *Client) events(ctx context.Context, sid string, want int) ([]Event, err
 			if t == "0" {
 				t = ""
 			}
-			events = append(events, Event{Time: t, Raw: string(ev.Raw)})
+			events = append(events, Event{
+				Time: t, Raw: string(ev.Raw),
+				Host: string(ev.Host), Source: string(ev.Source), SourceType: string(ev.SourceType),
+			})
 		}
 		if len(out.Results) < min(eventsPageSize, want-offset) {
 			break
