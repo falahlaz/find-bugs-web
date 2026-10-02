@@ -372,17 +372,51 @@ type Investigation struct {
 	// Model is the model(s) that produced the diagnosis; empty if the
 	// analysis failed or predates this column.
 	Model string `json:"model,omitempty"`
+	// CodeTrace is set when the analyzer tried to trace an internal error
+	// to the service code.
+	CodeTrace *CodeTrace `json:"codeTrace,omitempty"`
 }
+
+// CodeTrace is where an internal error was traced to in a service repo.
+type CodeTrace struct {
+	// Status is found or not_found (the tracer ran), or skipped or failed
+	// (it could not run; Reason says why).
+	Status      string `json:"status"`
+	Reason      string `json:"reason,omitempty"`
+	Project     string `json:"project,omitempty"`
+	Ref         string `json:"ref,omitempty"`
+	Commit      string `json:"commit,omitempty"`
+	File        string `json:"file,omitempty"`
+	Line        int    `json:"line,omitempty"`
+	Function    string `json:"function,omitempty"`
+	Snippet     string `json:"snippet,omitempty"`
+	Explanation string `json:"explanation,omitempty"`
+	URL         string `json:"url,omitempty"` // GitLab link to the line
+	Model       string `json:"model,omitempty"`
+}
+
+// CodeTrace statuses.
+const (
+	TraceFound    = "found"
+	TraceNotFound = "not_found"
+	TraceSkipped  = "skipped"
+	TraceFailed   = "failed"
+)
 
 // SaveInvestigation inserts or replaces the investigation for a job.
 func (s *Store) SaveInvestigation(ctx context.Context, inv Investigation) error {
 	logs, _ := json.Marshal(nonNil(inv.RelevantLogs))
 	linked, _ := json.Marshal(nonNil(inv.LinkedIDs))
+	var trace sql.NullString
+	if inv.CodeTrace != nil {
+		b, _ := json.Marshal(inv.CodeTrace)
+		trace = sql.NullString{String: string(b), Valid: true}
+	}
 	_, err := s.db.ExecContext(ctx, `INSERT OR REPLACE INTO investigations
-		(job_id, error_type, failed_component, severity, summary, likely_cause, suggested_action, relevant_logs, error_source, raw_log_snippet, llm_failed, linked_ids, model, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		(job_id, error_type, failed_component, severity, summary, likely_cause, suggested_action, relevant_logs, error_source, raw_log_snippet, llm_failed, linked_ids, model, code_trace, created_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		inv.JobID, inv.ErrorType, inv.FailedComponent, inv.Severity, inv.Summary, inv.LikelyCause, inv.SuggestedAction,
-		string(logs), inv.ErrorSource, inv.RawLogSnippet, inv.LLMFailed, string(linked), inv.Model, ts(s.now()))
+		string(logs), inv.ErrorSource, inv.RawLogSnippet, inv.LLMFailed, string(linked), inv.Model, trace, ts(s.now()))
 	return err
 }
 
@@ -396,10 +430,10 @@ func nonNil(s []string) []string {
 // GetInvestigation loads the investigation for a job.
 func (s *Store) GetInvestigation(ctx context.Context, jobID int64) (Investigation, error) {
 	var inv Investigation
-	var et, fc, sev, sum, lc, sa, logs, src, raw, linked, model sql.NullString
+	var et, fc, sev, sum, lc, sa, logs, src, raw, linked, model, trace sql.NullString
 	err := s.db.QueryRowContext(ctx, `SELECT job_id, error_type, failed_component, severity, summary, likely_cause, suggested_action,
-		relevant_logs, error_source, raw_log_snippet, llm_failed, linked_ids, model FROM investigations WHERE job_id = ?`, jobID).
-		Scan(&inv.JobID, &et, &fc, &sev, &sum, &lc, &sa, &logs, &src, &raw, &inv.LLMFailed, &linked, &model)
+		relevant_logs, error_source, raw_log_snippet, llm_failed, linked_ids, model, code_trace FROM investigations WHERE job_id = ?`, jobID).
+		Scan(&inv.JobID, &et, &fc, &sev, &sum, &lc, &sa, &logs, &src, &raw, &inv.LLMFailed, &linked, &model, &trace)
 	if errors.Is(err, sql.ErrNoRows) {
 		return inv, ErrNotFound
 	}
@@ -417,6 +451,12 @@ func (s *Store) GetInvestigation(ctx context.Context, jobID int64) (Investigatio
 		_ = json.Unmarshal([]byte(linked.String), &inv.LinkedIDs)
 	}
 	inv.LinkedIDs = nonNil(inv.LinkedIDs)
+	if trace.Valid {
+		var t CodeTrace
+		if json.Unmarshal([]byte(trace.String), &t) == nil {
+			inv.CodeTrace = &t
+		}
+	}
 	return inv, nil
 }
 

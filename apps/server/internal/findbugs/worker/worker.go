@@ -7,10 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/analyzer"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/redact"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/repos"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/splunk"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/watchdog"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/notify"
@@ -47,6 +49,15 @@ type Config struct {
 	// job (see package correlation); 0 turns the extra searches off.
 	CorrelationMaxIDs int
 	PublicURL         string
+	// GitLabURL is the base for links to traced code.
+	GitLabURL string
+	// TraceMaxRepos caps how many service repos one trace reads.
+	TraceMaxRepos int
+}
+
+// RepoSyncer is the subset of repos.Manager used by the worker.
+type RepoSyncer interface {
+	Sync(ctx context.Context, container string) (repos.Checkout, error)
 }
 
 // Worker processes jobs.
@@ -57,6 +68,9 @@ type Worker struct {
 	Monitor  Monitor
 	Notify   notify.Notifier
 	Cfg      Config
+	// Repos and Tracer, when both set, trace internal errors to the code.
+	Repos  RepoSyncer
+	Tracer analyzer.Tracer
 
 	wake chan struct{}
 }
@@ -257,6 +271,9 @@ func (w *Worker) run(parent context.Context, job store.Job) {
 		for _, l := range d.RelevantLogs {
 			inv.RelevantLogs = append(inv.RelevantLogs, redact.Sensitive(l))
 		}
+		if d.ErrorSource == "internal" && w.Repos != nil && w.Tracer != nil {
+			inv.CodeTrace = w.traceCode(ctx, log, job, path, d, res.Events)
+		}
 	}
 	if err := w.Store.SaveInvestigation(parent, inv); err != nil {
 		w.fail(parent, ctx, job, "Gagal menyimpan hasil: "+err.Error())
@@ -264,6 +281,60 @@ func (w *Worker) run(parent context.Context, job store.Job) {
 	}
 	w.set(parent, job.ID, store.Transition{Status: store.StatusDone, Stamp: "analyzed_at", FailureReason: reason})
 	log.Info("job done", "llm_failed", inv.LLMFailed, "model", inv.Model)
+}
+
+// traceCode finds the code behind an internal error in the repos of the
+// services that logged the transaction. It never fails the job: the
+// diagnosis stands on its own and the trace says why it is missing.
+func (w *Worker) traceCode(ctx context.Context, log *slog.Logger, job store.Job, logPath string, d analyzer.Diagnosis, events []splunk.Event) *store.CodeTrace {
+	containers := repos.Containers(events)
+	if len(containers) == 0 {
+		return &store.CodeTrace{Status: store.TraceSkipped, Reason: "Log Splunk tidak menyebut container service-nya, jadi repo GitLab tidak bisa ditentukan."}
+	}
+	if n := w.Cfg.TraceMaxRepos; n > 0 && len(containers) > n {
+		containers = containers[:n]
+	}
+	var rs []analyzer.Repo
+	checkouts := map[string]repos.Checkout{}
+	var errs []string
+	for _, c := range containers {
+		co, err := w.Repos.Sync(ctx, c)
+		if err != nil {
+			log.Warn("repo sync failed", "container", c, "project", co.Project, "err", err)
+			errs = append(errs, fmt.Sprintf("%s: %v", co.Project, err))
+			continue
+		}
+		checkouts[co.Project] = co
+		rs = append(rs, analyzer.Repo{Project: co.Project, Dir: co.Dir, Commit: co.Commit})
+	}
+	if len(rs) == 0 {
+		return &store.CodeTrace{Status: store.TraceFailed, Reason: "Gagal mengambil repo dari GitLab (cek VPN dan token): " + redact.Sensitive(strings.Join(errs, "; "))}
+	}
+	log.Info("tracing code", "repos", len(rs))
+	t, err := w.Tracer.Trace(ctx, job.TransactionID, logPath, d, rs)
+	if err != nil {
+		log.Warn("code trace failed", "err", err)
+		reason := "Trace kode gagal: " + redact.Sensitive(err.Error())
+		if cause := context.Cause(ctx); cause != nil && ctx.Err() != nil {
+			reason = "Trace kode berhenti: " + cause.Error()
+		}
+		return &store.CodeTrace{Status: store.TraceFailed, Reason: reason}
+	}
+	ct := &store.CodeTrace{
+		Status: t.Status, Project: t.Project, File: t.File, Line: t.Line, Function: t.Function,
+		Snippet: redact.Sensitive(t.Snippet), Explanation: redact.Sensitive(t.Explanation), Model: t.Model,
+	}
+	if co, ok := checkouts[t.Project]; ok {
+		ct.Ref, ct.Commit = co.Ref, co.Commit
+		if t.Status == store.TraceFound && w.Cfg.GitLabURL != "" {
+			ct.URL = fmt.Sprintf("%s/%s/-/blob/%s/%s", w.Cfg.GitLabURL, co.Project, co.Commit, t.File)
+			if t.Line > 0 {
+				ct.URL += fmt.Sprintf("#L%d", t.Line)
+			}
+		}
+	}
+	log.Info("code traced", "status", ct.Status, "project", ct.Project, "file", ct.File, "line", ct.Line)
+	return ct
 }
 
 // searchFailure turns a Splunk error into a user-facing reason, noting a

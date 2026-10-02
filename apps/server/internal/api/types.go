@@ -74,6 +74,9 @@ type Result struct {
 	RawLogSnippet   string   `json:"rawLogSnippet,omitempty"`
 	// Model is the AI model(s) that produced the diagnosis (engineers only).
 	Model string `json:"model,omitempty"`
+	// CodeTrace is where an internal error was traced to in the service
+	// code (engineers only).
+	CodeTrace *store.CodeTrace `json:"codeTrace,omitempty"`
 }
 
 // JobListResponse is a page of jobs.

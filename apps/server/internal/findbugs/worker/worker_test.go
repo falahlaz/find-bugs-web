@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/analyzer"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/jobs"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/repos"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/splunk"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/splunk/splunktest"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/watchdog"
@@ -409,5 +411,49 @@ func TestFormatLogFileEventMeta(t *testing.T) {
 	}
 	if !strings.Contains(got, "#2 [t2]\nno meta\n") {
 		t.Errorf("event without metadata:\n%s", got)
+	}
+}
+
+type fakeRepos struct{ fail map[string]bool }
+
+func (f fakeRepos) Sync(_ context.Context, c string) (repos.Checkout, error) {
+	co := repos.Checkout{Container: c, Project: "grp/" + c, Dir: "/r/grp/" + c, Ref: "main", Commit: "c0ffee"}
+	if f.fail[c] {
+		return co, errors.New("clone failed")
+	}
+	return co, nil
+}
+
+func TestCodeTrace(t *testing.T) {
+	e := setup(t, analyzer.Fake{})
+	e.w.Repos, e.w.Tracer = fakeRepos{}, analyzer.Fake{}
+	e.w.Cfg.GitLabURL = "https://gitlab.example.com"
+	ctx := context.Background()
+
+	// The fake Splunk's events carry no pod log path: nothing to trace into.
+	e.fake.SetLogs("abc-1", "ERROR boom")
+	j := e.submit(t, "abc-1")
+	e.step(t)
+	inv, err := e.st.GetInvestigation(ctx, j.ID)
+	if err != nil || inv.CodeTrace == nil || inv.CodeTrace.Status != store.TraceSkipped {
+		t.Fatalf("trace = %+v, %v", inv.CodeTrace, err)
+	}
+
+	pod := func(c string) splunk.Event { return splunk.Event{Source: "/var/log/pods/ns_p_u/" + c + "/0.log"} }
+	log := slog.Default()
+	ct := e.w.traceCode(ctx, log, j, "logs", analyzer.Diagnosis{}, []splunk.Event{pod("svc"), pod("svc"), pod("gw")})
+	if ct.Status != store.TraceFound || ct.Project != "grp/svc" || ct.Commit != "c0ffee" || ct.Ref != "main" ||
+		ct.URL != "https://gitlab.example.com/grp/svc/-/blob/c0ffee/README.md#L1" {
+		t.Fatalf("found trace = %+v", ct)
+	}
+
+	e.w.Repos = fakeRepos{fail: map[string]bool{"svc": true}}
+	if ct := e.w.traceCode(ctx, log, j, "logs", analyzer.Diagnosis{}, []splunk.Event{pod("svc")}); ct.Status != store.TraceFailed || !strings.Contains(ct.Reason, "grp/svc: clone failed") {
+		t.Fatalf("sync failure trace = %+v", ct)
+	}
+
+	e.w.Repos, e.w.Tracer = fakeRepos{}, analyzer.Fake{Err: errors.New("cli down")}
+	if ct := e.w.traceCode(ctx, log, j, "logs", analyzer.Diagnosis{}, []splunk.Event{pod("svc")}); ct.Status != store.TraceFailed || !strings.Contains(ct.Reason, "cli down") {
+		t.Fatalf("tracer failure trace = %+v", ct)
 	}
 }

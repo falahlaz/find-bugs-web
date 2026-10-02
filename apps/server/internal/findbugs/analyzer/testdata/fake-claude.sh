@@ -9,6 +9,16 @@ esac
 # Prove only read-only tools are enabled, the prompt arrived on stdin and the
 # log file sits in the working directory.
 case "$*" in *"--tools Read,Grep,Glob --permission-mode dontAsk "*) ;; *) echo "tool flags missing" >&2; exit 3 ;; esac
+# Tracing pass: the repo is readable through --add-dir and named in the prompt.
+case "$*" in *"--add-dir "*)
+	case "$input" in *"Service checkouts"*"grp/svc → "*) ;; *) echo "trace prompt missing" >&2; exit 6 ;; esac
+	grep -q "ERROR 504" logs.txt || { echo "logs.txt missing" >&2; exit 5; }
+	dir=${*##*--add-dir }
+	cat <<J
+{"type":"result","is_error":false,"result":"{\"status\":\"found\",\"project\":\"grp/svc\",\"file\":\"$dir/server/a.js\",\"line\":12,\"function\":\"pay\",\"snippet\":\"x()\",\"explanation\":\"null\"}","modelUsage":{"m":{}}}
+J
+	exit 0 ;;
+esac
 case "$input" in *"Transaction ID: abc-1"*"./logs.txt"*) ;; *) echo "prompt missing" >&2; exit 4 ;; esac
 grep -q "ERROR 504" logs.txt || { echo "logs.txt missing" >&2; exit 5; }
 cat <<'J'
