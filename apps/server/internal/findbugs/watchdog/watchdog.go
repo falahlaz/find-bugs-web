@@ -108,6 +108,12 @@ func (m *Monitor) reset(key string) {
 
 // CheckVPN runs a live status check and records the result.
 func (m *Monitor) CheckVPN(ctx context.Context) bool {
+	return m.VPNStatus(ctx).Healthy
+}
+
+// VPNStatus runs a live status check, records it like CheckVPN and returns
+// the full result, so the panel and the banners always show the same check.
+func (m *Monitor) VPNStatus(ctx context.Context) vpn.StatusResult {
 	m.checkVPNMu.Lock()
 	defer m.checkVPNMu.Unlock()
 	s := m.vpn.Status()
@@ -142,7 +148,7 @@ func (m *Monitor) CheckVPN(ctx context.Context) bool {
 		m.reset("vpn-up")
 		m.notify.Notify(ctx, "vpn-down", "⚠️ VPN GlobalProtect putus atau sesi habis. Job baru menunggu sampai ada yang login ulang lewat halaman Koneksi."+m.link())
 	}
-	return s.Healthy
+	return s
 }
 
 // MarkVPNDown records a VPN failure observed by the worker without waiting

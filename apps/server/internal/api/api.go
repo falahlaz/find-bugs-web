@@ -541,8 +541,8 @@ func (a *API) vpnDisconnect(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusOK, res)
 }
 
-func (a *API) vpnStatus(w http.ResponseWriter, _ *http.Request) {
-	httpx.JSON(w, http.StatusOK, a.VPN.Status())
+func (a *API) vpnStatus(w http.ResponseWriter, r *http.Request) {
+	httpx.JSON(w, http.StatusOK, a.Monitor.VPNStatus(context.WithoutCancel(r.Context())))
 }
 
 func (a *API) vpnLogs(w http.ResponseWriter, _ *http.Request) {
