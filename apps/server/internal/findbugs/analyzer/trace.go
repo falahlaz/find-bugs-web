@@ -320,6 +320,9 @@ func toolProgress(dir string, repos []Repo, progress Progress) func(tool string,
 	}
 	rel := func(p string) string {
 		for _, r := range repos {
+			if r.Dir == "" {
+				continue
+			}
 			if rest, ok := strings.CutPrefix(p, r.Dir+"/"); ok {
 				return r.Project + "/" + rest
 			}

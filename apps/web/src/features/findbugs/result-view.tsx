@@ -163,7 +163,18 @@ export function TraceVersion({ trace }: { trace: CodeTrace }) {
 }
 
 /** Diagnosis plus the engineer report as stacked cards. */
-export function ResultView({ result, engineer, animate = false }: { result: Result; engineer: boolean; animate?: boolean }) {
+export function ResultView({
+  result,
+  engineer,
+  animate = false,
+  trace,
+}: {
+  result: Result
+  engineer: boolean
+  animate?: boolean
+  /** Replaces the plain code trace view (the job page adds the chat). */
+  trace?: ReactNode
+}) {
   return (
     <div className="grid gap-4">
       <Card>
@@ -191,7 +202,7 @@ export function ResultView({ result, engineer, animate = false }: { result: Resu
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <CodeTraceView trace={result.codeTrace} />
+            {trace ?? <CodeTraceView trace={result.codeTrace} />}
           </CardContent>
         </Card>
       )}

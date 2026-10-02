@@ -13,6 +13,7 @@ import { useCancelJob, useJob, useTimezone } from './queries'
 import { FieldLabel, ResultView, type Result } from './result-view'
 import { isFinal, isPending, statusInfo, type JobStatus, type JobView } from './status'
 import { SeverityBadge, StatusBadge } from './status-badge'
+import { TraceSection } from './trace-chat'
 import { useRerun } from './use-rerun'
 
 function Notices({ job }: { job: JobView }) {
@@ -165,7 +166,14 @@ function JobDetail({ id }: { id: number }) {
               </CardContent>
             </Card>
           )}
-          {result && <ResultView result={result} engineer={engineer} animate={justFinished} />}
+          {result && (
+            <ResultView
+              result={result}
+              engineer={engineer}
+              animate={justFinished}
+              trace={engineer && result.codeTrace ? <TraceSection jobId={id} initial={result.codeTrace} /> : undefined}
+            />
+          )}
           {!result && status !== 'ANALYZING' && isFinal(status) === false && (
             <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Diagnosis muncul di sini setelah analisis AI selesai.</p>
           )}
