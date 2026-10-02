@@ -25,6 +25,7 @@ import (
 
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/api"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/analyzer"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/gitlab"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/jobs"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/repos"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/splunk"
@@ -106,7 +107,7 @@ func serve() error {
 	wk := worker.New(st, sp, an, mon, notifier, worker.Config{
 		WaitingExpiry: cfg.WaitingExpiry, RecheckAfter: cfg.JobRecheckAfter, JobTimeout: cfg.JobTimeout, PublicURL: cfg.PublicURL,
 		LogDir: logDir(cfg), CorrelationMaxIDs: cfg.Splunk.CorrelationMaxIDs,
-		GitLabURL: cfg.GitLab.URL, TraceMaxRepos: cfg.GitLab.MaxRepos,
+		GitLabURL: cfg.GitLab.URL, TraceMaxRepos: cfg.GitLab.MaxRepos, EnvMap: cfg.GitLab.EnvMap,
 	})
 	if g := cfg.GitLab; g.Enabled() {
 		wk.Repos = repos.New(repos.Config{
@@ -114,7 +115,12 @@ func serve() error {
 			Dir: g.ReposDir, Group: g.Group, RepoMap: g.RepoMap, Ref: g.Ref, Timeout: g.Timeout,
 		})
 		wk.Tracer = tracer
-		slog.Info("code tracing enabled", "gitlab", g.URL, "dir", g.ReposDir, "ref", g.Ref, "model", g.Model)
+		gl, err := gitlab.New(gitlab.Config{URL: g.URL, Token: g.Token, CAFile: g.CAFile, SkipTLSVerify: g.SkipTLSVerify})
+		if err != nil {
+			return err
+		}
+		wk.Deploys = gl
+		slog.Info("code tracing enabled", "gitlab", g.URL, "dir", g.ReposDir, "ref", g.Ref, "model", g.Model, "env_map", g.EnvMap)
 	} else {
 		slog.Info("code tracing disabled (set GITLAB_URL and GITLAB_TOKEN to enable)")
 	}

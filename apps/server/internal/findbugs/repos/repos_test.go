@@ -7,28 +7,34 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/splunk"
 )
 
 func TestContainer(t *testing.T) {
-	for src, want := range map[string]string{
-		"/var/log/pods/tdw-dev_service-payment-migration-5448bb778c-6sbnz_d75ca60c-f4b6-472e-b11b-f8d2e5f450bd/service-payment-migration/0.log": "service-payment-migration",
-		"/var/log/pods/ns_pod-1_uid/app/12.log": "app",
-		"/var/log/pods/ns_pod_uid/../etc/0.log": "",
-		"/var/log/containers/x.log":             "",
-		"":                                      "",
+	for src, want := range map[string][2]string{
+		"/var/log/pods/tdw-dev_service-payment-migration-5448bb778c-6sbnz_d75ca60c-f4b6-472e-b11b-f8d2e5f450bd/service-payment-migration/0.log": {"service-payment-migration", "tdw-dev"},
+		"/var/log/pods/ns_pod-1_uid/app/12.log": {"app", "ns"},
+		"/var/log/pods/ns_pod_uid/../etc/0.log": {"", ""},
+		"/var/log/containers/x.log":             {"", ""},
+		"":                                      {"", ""},
 	} {
-		if got := Container(src); got != want {
-			t.Errorf("Container(%q) = %q, want %q", src, got, want)
+		if got := [2]string{Container(src), Namespace(src)}; got != want {
+			t.Errorf("Container/Namespace(%q) = %q, want %q", src, got, want)
 		}
 	}
 	evs := []splunk.Event{
-		{Source: "/var/log/pods/n_p_u/b/0.log"}, {Source: "/var/log/pods/n_p_u/a/0.log"},
-		{Source: "/var/log/pods/n_p_u/b/0.log"}, {Source: "other"}, {Source: "/var/log/pods/n_p_u/c/0.log"},
+		{Source: "/var/log/pods/n_p_u/b/0.log", Time: "2026-10-02T17:41:29.502+07:00"}, {Source: "/var/log/pods/n_p_u/a/0.log"},
+		{Source: "/var/log/pods/n_p_u/b/0.log", Time: "2026-10-02T17:41:30.000+07:00"}, {Source: "other"},
+		{Source: "/var/log/pods/m_p_u/c/0.log"}, {Source: "/var/log/pods/n_p_u/c/0.log"}, {Source: "/var/log/pods/n_p_u/c/0.log"},
 	}
-	if got := strings.Join(Containers(evs), ","); got != "b,a,c" {
+	if got := strings.Join(Containers(evs), ","); got != "b,c,a" {
 		t.Errorf("Containers = %s", got)
+	}
+	ts := Targets(evs)
+	if ts[0].Namespace != "n" || !ts[0].LastSeen.Equal(time.Date(2026, 10, 2, 10, 41, 30, 0, time.UTC)) || ts[1].Namespace != "n" || !ts[2].LastSeen.IsZero() {
+		t.Errorf("Targets = %+v", ts)
 	}
 }
 
@@ -64,8 +70,8 @@ func git(t *testing.T, dir string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
-// TestSync clones from a local "GitLab" (bare repos under a directory served
-// over file://), then fetches a new commit and cleans the worktree.
+// TestSync fetches from a local "GitLab" (bare repos under a directory
+// served over file://) into one worktree per commit.
 func TestSync(t *testing.T) {
 	root := t.TempDir()
 	remote := filepath.Join(root, "gitlab")
@@ -76,20 +82,24 @@ func TestSync(t *testing.T) {
 	git(t, work, "add", ".")
 	git(t, work, "commit", "-qm", "one")
 	git(t, work, "push", "-q", "origin", "HEAD:main")
+	git(t, work, "tag", "-a", "-m", "v1", "1.0.0")
+	git(t, work, "push", "-q", "origin", "1.0.0")
+	first := git(t, work, "rev-parse", "HEAD")
 
-	m := New(Config{URL: "file://" + remote, Token: "glpat-secret", Dir: filepath.Join(root, "repos"), Group: "grp"})
+	repos := filepath.Join(root, "repos")
+	m := New(Config{URL: "file://" + remote, Token: "glpat-secret", Dir: repos, Group: "grp"})
 	ctx := context.Background()
-	co, err := m.Sync(ctx, "svc")
+	co, err := m.Sync(ctx, "svc", "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if co.Project != "grp/svc" || co.Dir != filepath.Join(root, "repos", "grp", "svc") || co.Commit != git(t, work, "rev-parse", "HEAD") {
+	if co.Project != "grp/svc" || co.Ref != "main" || co.Commit != first || co.Dir != filepath.Join(repos, ".worktrees", "grp", "svc@"+first[:12]) {
 		t.Fatalf("checkout = %+v", co)
 	}
 	if b, _ := os.ReadFile(filepath.Join(co.Dir, "a.js")); string(b) != "v1\n" {
 		t.Fatalf("a.js = %q", b)
 	}
-	cfg, _ := os.ReadFile(filepath.Join(co.Dir, ".git", "config"))
+	cfg, _ := os.ReadFile(filepath.Join(repos, "grp", "svc", ".git", "config"))
 	if strings.Contains(string(cfg), "secret") || strings.Contains(string(cfg), "extraHeader") {
 		t.Fatalf("credentials leaked into .git/config:\n%s", cfg)
 	}
@@ -97,28 +107,56 @@ func TestSync(t *testing.T) {
 	os.WriteFile(filepath.Join(work, "a.js"), []byte("v2\n"), 0o644)
 	git(t, work, "commit", "-qam", "two")
 	git(t, work, "push", "-q", "origin", "HEAD:main")
-	os.WriteFile(filepath.Join(co.Dir, "a.js"), []byte("local edit\n"), 0o644)
-	os.WriteFile(filepath.Join(co.Dir, "junk"), []byte("x"), 0o644)
-	co2, err := m.Sync(ctx, "svc")
+	second := git(t, work, "rev-parse", "HEAD")
+	co2, err := m.Sync(ctx, "svc", "main")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if co2.Commit != git(t, work, "rev-parse", "HEAD") || co2.Commit == co.Commit {
-		t.Fatalf("not updated: %s", co2.Commit)
+	if co2.Commit != second || co2.Dir == co.Dir {
+		t.Fatalf("not updated: %+v", co2)
 	}
-	if b, _ := os.ReadFile(filepath.Join(co.Dir, "a.js")); string(b) != "v2\n" {
-		t.Fatalf("a.js after sync = %q", b)
-	}
-	if _, err := os.Stat(filepath.Join(co.Dir, "junk")); !os.IsNotExist(err) {
-		t.Fatal("untracked file not cleaned")
+	// The first commit's worktree is untouched by the newer sync.
+	if b, _ := os.ReadFile(filepath.Join(co.Dir, "a.js")); string(b) != "v1\n" {
+		t.Fatalf("old worktree a.js = %q", b)
 	}
 
-	_, err = m.Sync(ctx, "missing")
+	// A deployed commit by SHA, and a tag, map to the same worktree.
+	co3, err := m.Sync(ctx, "svc", first)
+	if err != nil || co3.Dir != co.Dir || co3.Commit != first {
+		t.Fatalf("sync by sha = %+v, %v", co3, err)
+	}
+	co4, err := m.Sync(ctx, "svc", "1.0.0")
+	if err != nil || co4.Commit != first || co4.Ref != "1.0.0" {
+		t.Fatalf("sync by tag = %+v, %v", co4, err)
+	}
+
+	for _, bad := range []string{"--upload-pack=x", "main..x", "HEAD~1", "a b"} {
+		if _, err := m.Sync(ctx, "svc", bad); err == nil || !strings.Contains(err.Error(), "invalid ref") {
+			t.Errorf("Sync(%q) err = %v", bad, err)
+		}
+	}
+	_, err = m.Sync(ctx, "missing", "")
 	if err == nil || strings.Contains(err.Error(), "glpat-secret") {
 		t.Fatalf("missing repo err = %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(root, "repos", "grp", "missing")); !os.IsNotExist(err) {
-		t.Fatal("failed clone left a directory behind")
+
+	// Prune drops worktrees unused for the TTL unless kept.
+	old := time.Now().Add(-48 * time.Hour)
+	os.Chtimes(co.Dir, old, old)
+	os.Chtimes(co2.Dir, old, old)
+	n, err := m.Prune(ctx, 24*time.Hour, func(dir string) bool { return dir == co2.Dir })
+	if err != nil || n != 1 {
+		t.Fatalf("Prune = %d, %v", n, err)
+	}
+	if _, err := os.Stat(co.Dir); !os.IsNotExist(err) {
+		t.Fatal("stale worktree not removed")
+	}
+	if _, err := os.Stat(co2.Dir); err != nil {
+		t.Fatal("kept worktree removed")
+	}
+	// A pruned commit can be checked out again.
+	if co5, err := m.Sync(ctx, "svc", first); err != nil || co5.Dir != co.Dir {
+		t.Fatalf("re-sync after prune = %+v, %v", co5, err)
 	}
 }
 

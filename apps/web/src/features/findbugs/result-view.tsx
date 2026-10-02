@@ -1,8 +1,10 @@
 import { Code2, ExternalLink, Sparkles } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Alert } from '@/components/ui/alert'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { Schemas } from '@/lib/api'
+import { formatDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { LogViewer } from './log-viewer'
 import { SeverityBadge } from './status-badge'
@@ -120,12 +122,43 @@ export function CodeTraceView({ trace }: { trace: CodeTrace }) {
         <pre className="max-h-96 overflow-auto rounded-lg border bg-muted px-3 py-2.5 font-mono text-[12.5px] leading-relaxed">{trace.snippet}</pre>
       )}
       <Field label="Penjelasan" value={trace.explanation} />
-      <p className="text-xs text-muted-foreground">
-        {trace.project}
-        {trace.commit && ` @ ${trace.commit.slice(0, 8)}`}. Kode diambil dari branch {trace.ref || 'main'}, jadi nomor baris bisa meleset
-        kalau versi yang ter-deploy berbeda.
-      </p>
+      <TraceVersion trace={trace} />
     </div>
+  )
+}
+
+/** Which version of the code the trace read, and how it was picked. */
+export function TraceVersion({ trace }: { trace: CodeTrace }) {
+  if (!trace.commit) return null
+  const commit = <span className="font-mono">{trace.commit.slice(0, 8)}</span>
+  const ref = <span className="font-mono break-all">{trace.ref}</span>
+  if (trace.refSource === 'deployed') {
+    return (
+      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+        <Badge tone="success">Versi ter-deploy · {trace.env}</Badge>
+        {trace.project} @ {commit} dari {ref}
+        {trace.deployedAt && (
+          <>
+            , deploy{' '}
+            {trace.deployJobUrl ? (
+              <a href={trace.deployJobUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                {formatDateTime(trace.deployedAt)}
+              </a>
+            ) : (
+              formatDateTime(trace.deployedAt)
+            )}
+          </>
+        )}
+        .
+      </p>
+    )
+  }
+  return (
+    <p className="text-xs text-muted-foreground">
+      {trace.project} @ {commit} dari {trace.refSource === 'manual' ? 'pilihan engineer' : 'branch'} {ref}
+      {trace.refSource === 'manual' ? '. ' : ', bukan versi yang ter-deploy, jadi nomor baris bisa meleset. '}
+      {trace.refNote}
+    </p>
   )
 }
 

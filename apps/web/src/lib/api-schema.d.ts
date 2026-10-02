@@ -391,6 +391,9 @@ export interface components {
         };
         CodeTrace: {
             commit?: string;
+            deployJobUrl?: string;
+            deployedAt?: string;
+            env?: string;
             explanation?: string;
             file?: string;
             function?: string;
@@ -400,6 +403,8 @@ export interface components {
             project?: string;
             reason?: string;
             ref?: string;
+            refNote?: string;
+            refSource?: string;
             snippet?: string;
             status: string;
             url?: string;

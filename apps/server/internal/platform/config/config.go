@@ -115,6 +115,25 @@ type GitLab struct {
 	// TraceEnabled is CODE_TRACE_ENABLED, the switch to turn tracing off
 	// without removing the GitLab settings.
 	TraceEnabled bool
+	// EnvMap maps a Kubernetes namespace (from the Splunk source path) to the
+	// GitLab environment whose last deploy-eks:<env> job says which commit
+	// runs there. Namespaces not in it are traced on Ref.
+	EnvMap map[string]string
+	// WorktreeTTL is how long a per-commit checkout no trace session needs
+	// is kept after its last use; 0 keeps them forever.
+	WorktreeTTL time.Duration
+	// SessionIdle closes a trace chat after this long without a message; it
+	// can be reopened. SessionRetention deletes the Claude session files of
+	// chats idle this long (the chat history stays readable).
+	SessionIdle      time.Duration
+	SessionRetention time.Duration
+	// ChatConcurrency caps the chat and re-trace turns running at once.
+	ChatConcurrency int
+}
+
+// DefaultEnvMap is GITLAB_ENV_MAP when unset.
+var DefaultEnvMap = map[string]string{
+	"tdw-dev": "dev", "tdw-staging": "staging", "tdw-preprod": "preprod", "blue": "blue", "tdw-webapi": "production",
 }
 
 // Enabled reports whether code tracing is switched on and configured.
@@ -259,6 +278,21 @@ func Load(full bool) (Config, error) {
 		Model:         l.str("CODE_TRACE_MODEL", "claude-opus-5-5"),
 		TraceTimeout:  l.dur("CODE_TRACE_TIMEOUT", 8*time.Minute),
 		TraceEnabled:  l.bool("CODE_TRACE_ENABLED", true),
+		EnvMap:        DefaultEnvMap,
+
+		WorktreeTTL:      time.Duration(l.int("GITLAB_WORKTREE_TTL_DAYS", 14)) * 24 * time.Hour,
+		SessionIdle:      l.dur("TRACE_SESSION_IDLE", 10*time.Minute),
+		SessionRetention: time.Duration(l.int("TRACE_SESSION_RETENTION_DAYS", 30)) * 24 * time.Hour,
+		ChatConcurrency:  l.int("TRACE_CHAT_CONCURRENCY", 2),
+	}
+	if raw := l.str("GITLAB_ENV_MAP", ""); raw != "" {
+		c.GitLab.EnvMap = nil
+		if err := json.Unmarshal([]byte(raw), &c.GitLab.EnvMap); err != nil {
+			l.errs = append(l.errs, fmt.Sprintf("GITLAB_ENV_MAP: %v", err))
+		}
+	}
+	if c.GitLab.ChatConcurrency < 1 {
+		c.GitLab.ChatConcurrency = 1
 	}
 	if raw := l.str("GITLAB_REPO_MAP", ""); raw != "" {
 		if err := json.Unmarshal([]byte(raw), &c.GitLab.RepoMap); err != nil {

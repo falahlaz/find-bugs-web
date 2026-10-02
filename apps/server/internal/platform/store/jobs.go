@@ -381,19 +381,34 @@ type Investigation struct {
 type CodeTrace struct {
 	// Status is found or not_found (the tracer ran), or skipped or failed
 	// (it could not run; Reason says why).
-	Status      string `json:"status"`
-	Reason      string `json:"reason,omitempty"`
-	Project     string `json:"project,omitempty"`
-	Ref         string `json:"ref,omitempty"`
-	Commit      string `json:"commit,omitempty"`
-	File        string `json:"file,omitempty"`
-	Line        int    `json:"line,omitempty"`
-	Function    string `json:"function,omitempty"`
-	Snippet     string `json:"snippet,omitempty"`
-	Explanation string `json:"explanation,omitempty"`
-	URL         string `json:"url,omitempty"` // GitLab link to the line
-	Model       string `json:"model,omitempty"`
+	Status  string `json:"status"`
+	Reason  string `json:"reason,omitempty"`
+	Project string `json:"project,omitempty"`
+	Ref     string `json:"ref,omitempty"`
+	Commit  string `json:"commit,omitempty"`
+	// RefSource says how Ref was chosen: RefDeployed (the commit deployed in
+	// Env when the error happened), RefFallback (the default branch, RefNote
+	// says why) or RefManual (picked by an engineer).
+	RefSource    string `json:"refSource,omitempty"`
+	RefNote      string `json:"refNote,omitempty"`
+	Env          string `json:"env,omitempty"`
+	DeployedAt   string `json:"deployedAt,omitempty"` // RFC 3339
+	DeployJobURL string `json:"deployJobUrl,omitempty"`
+	File         string `json:"file,omitempty"`
+	Line         int    `json:"line,omitempty"`
+	Function     string `json:"function,omitempty"`
+	Snippet      string `json:"snippet,omitempty"`
+	Explanation  string `json:"explanation,omitempty"`
+	URL          string `json:"url,omitempty"` // GitLab link to the line
+	Model        string `json:"model,omitempty"`
 }
+
+// CodeTrace ref sources.
+const (
+	RefDeployed = "deployed"
+	RefFallback = "fallback"
+	RefManual   = "manual"
+)
 
 // CodeTrace statuses.
 const (

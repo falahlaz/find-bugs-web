@@ -146,6 +146,15 @@
           "commit": {
             "type": "string"
           },
+          "deployJobUrl": {
+            "type": "string"
+          },
+          "deployedAt": {
+            "type": "string"
+          },
+          "env": {
+            "type": "string"
+          },
           "explanation": {
             "type": "string"
           },
@@ -169,6 +178,12 @@
             "type": "string"
           },
           "ref": {
+            "type": "string"
+          },
+          "refNote": {
+            "type": "string"
+          },
+          "refSource": {
             "type": "string"
           },
           "snippet": {
