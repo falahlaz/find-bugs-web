@@ -1,18 +1,29 @@
+import { CircleAlert, Info } from 'lucide-react'
 import type * as React from 'react'
 import { cn } from '@/lib/utils'
 
-export function Alert({ className, tone = 'neutral', ...props }: React.ComponentProps<'div'> & { tone?: 'neutral' | 'danger' | 'warning' | 'info' }) {
+export function Alert({
+  className,
+  tone = 'neutral',
+  children,
+  ...props
+}: React.ComponentProps<'div'> & { tone?: 'neutral' | 'danger' | 'warning' | 'info' }) {
+  const Icon = tone === 'danger' || tone === 'warning' ? CircleAlert : Info
   return (
     <div
       role="alert"
       className={cn(
-        'rounded-lg border px-4 py-3 text-sm',
-        tone === 'danger' && 'border-destructive/30 bg-destructive/5 text-destructive',
-        tone === 'warning' && 'border-amber-300 bg-amber-50 text-amber-900 dark:bg-amber-900/20 dark:text-amber-200',
-        tone === 'info' && 'border-sky-200 bg-sky-50 text-sky-900 dark:bg-sky-900/20 dark:text-sky-200',
+        'flex gap-2.5 rounded-lg px-3.5 py-2.5 text-sm text-foreground',
+        tone === 'neutral' && 'bg-neu-bg [&>svg]:text-neu',
+        tone === 'danger' && 'bg-bad-bg [&>svg]:text-bad',
+        tone === 'warning' && 'bg-warn-bg [&>svg]:text-warn',
+        tone === 'info' && 'bg-info-bg [&>svg]:text-info',
         className,
       )}
       {...props}
-    />
+    >
+      <Icon className="mt-0.5 size-4 shrink-0" aria-hidden />
+      <div className="min-w-0 flex-1">{children}</div>
+    </div>
   )
 }

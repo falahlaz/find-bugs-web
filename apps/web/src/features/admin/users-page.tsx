@@ -3,9 +3,10 @@ import { useAuth } from '@/app/auth-context'
 import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { PageHeader } from '@/components/ui/page-header'
 import { Select } from '@/components/ui/select'
 import { useTimezone } from '@/features/findbugs/queries'
 import type { User } from '@/lib/api'
@@ -162,11 +163,11 @@ export function UsersPage() {
   const { user } = useAuth()
   const users = useUsers()
   return (
-    <div className="grid gap-6">
+    <div className="grid gap-4">
+      <PageHeader title="User" description="Tidak ada self-signup. Setiap perubahan role, status, atau password langsung mengakhiri sesi user tersebut." />
       <Card>
         <CardHeader>
           <CardTitle>Tambah user</CardTitle>
-          <CardDescription>Tidak ada self-signup. Setiap perubahan role, status, atau password langsung mengakhiri sesi user tersebut.</CardDescription>
         </CardHeader>
         <CardContent>
           <CreateUserForm />
@@ -174,14 +175,14 @@ export function UsersPage() {
       </Card>
       <Card>
         <CardHeader>
-          <CardTitle>User</CardTitle>
+          <CardTitle>Semua user</CardTitle>
         </CardHeader>
         <CardContent>
           {users.error && <Alert tone="danger">{users.error.message}</Alert>}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <tr className="border-b text-left text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
                   <th className="py-2 pr-3 font-medium">Username</th>
                   <th className="py-2 pr-3 font-medium">Role</th>
                   <th className="py-2 pr-3 font-medium">Status</th>

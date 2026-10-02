@@ -32,8 +32,11 @@ export function LoginPage() {
   }
 
   return (
-    <div className="relative flex min-h-svh items-center justify-center bg-muted p-6">
+    <div className="relative flex min-h-svh flex-col items-center justify-center gap-5 bg-background p-6">
       <ThemeToggle className="absolute top-4 right-4" />
+      <span className="grid size-11 place-items-center rounded-xl bg-primary font-mono text-sm font-semibold text-primary-foreground" aria-hidden>
+        FB
+      </span>
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle className="text-xl">Find Bugs</CardTitle>

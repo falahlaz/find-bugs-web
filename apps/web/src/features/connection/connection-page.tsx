@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useLocation } from 'react-router'
-import { Card, CardContent } from '@/components/ui/card'
+import { PageHeader } from '@/components/ui/page-header'
 import { useSplunkStatus } from '@/features/splunk/queries'
 import { SplunkBadge, SplunkPanel } from '@/features/splunk/splunk-panel'
 import { useVpnStatus } from '@/features/vpn/queries'
@@ -12,11 +12,17 @@ function scrollToSection(id: string) {
 
 function SectionTitle({ step, title, hint }: { step: number; title: string; hint: string }) {
   return (
-    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-      <h2 className="text-lg font-semibold">
-        <span className="text-muted-foreground">Langkah {step} ·</span> {title}
-      </h2>
-      <span className="text-sm text-muted-foreground">{hint}</span>
+    <div className="flex items-start gap-3">
+      <span className="grid size-7 shrink-0 place-items-center rounded-full border bg-card font-mono text-xs font-semibold" aria-hidden>
+        {step}
+      </span>
+      <div className="grid gap-0.5">
+        <h2 className="text-base font-semibold">
+          <span className="sr-only">Langkah {step}: </span>
+          {title}
+        </h2>
+        <span className="text-sm text-muted-foreground">{hint}</span>
+      </div>
     </div>
   )
 }
@@ -47,23 +53,21 @@ export function ConnectionPage() {
   }, [vpn.data, vpnUp, splunkNeedsReauth])
 
   return (
-    <div className="grid gap-8">
-      <Card className="py-4">
-        <CardContent className="flex flex-wrap items-center gap-x-8 gap-y-3 text-sm">
-          <button type="button" className="flex items-center gap-2" onClick={() => scrollToSection('vpn')}>
-            <span className="font-medium">VPN</span>
-            <VpnBadge />
-          </button>
-          <span className="text-muted-foreground" aria-hidden>
-            →
-          </span>
-          <button type="button" className="flex items-center gap-2" onClick={() => scrollToSection('splunk')}>
-            <span className="font-medium">Splunk</span>
-            <SplunkBadge />
-          </button>
-          <span className="text-xs text-muted-foreground sm:ml-auto">Setelah VPN login ulang, sesi Splunk biasanya perlu Re-auth.</span>
-        </CardContent>
-      </Card>
+    <div className="grid gap-7">
+      <PageHeader title="Koneksi" description="VPN dulu, lalu Splunk. Setelah VPN login ulang, sesi Splunk biasanya perlu Re-auth." />
+      <div className="flex flex-wrap items-center gap-2 text-sm">
+        <button type="button" className="flex items-center gap-2 rounded-md border bg-card px-3 py-1.5 hover:bg-secondary" onClick={() => scrollToSection('vpn')}>
+          <span className="font-medium">VPN</span>
+          <VpnBadge />
+        </button>
+        <span className="text-muted-foreground" aria-hidden>
+          →
+        </span>
+        <button type="button" className="flex items-center gap-2 rounded-md border bg-card px-3 py-1.5 hover:bg-secondary" onClick={() => scrollToSection('splunk')}>
+          <span className="font-medium">Splunk</span>
+          <SplunkBadge />
+        </button>
+      </div>
 
       <section id="vpn" className="grid scroll-mt-6 gap-4">
         <SectionTitle step={1} title="VPN" hint="Sambungkan GlobalProtect dengan akun SSO kamu." />

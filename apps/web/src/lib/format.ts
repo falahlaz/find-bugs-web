@@ -27,3 +27,12 @@ export function formatDuration(startIso: string | null | undefined, endIso?: str
   if (m < 60) return `${m} mnt ${String(s % 60).padStart(2, '0')} dtk`
   return `${Math.floor(m / 60)} jam ${m % 60} mnt`
 }
+
+/** "10:41" for today, "1 Okt" otherwise; for dense lists. */
+export function formatShort(iso: string | null | undefined, timeZone = 'Asia/Jakarta') {
+  if (!iso) return '–'
+  const d = new Date(iso)
+  const day = (x: Date) => new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(x)
+  if (day(d) === day(new Date())) return new Intl.DateTimeFormat('id-ID', { timeZone, hour: '2-digit', minute: '2-digit' }).format(d)
+  return new Intl.DateTimeFormat('id-ID', { timeZone, day: 'numeric', month: 'short' }).format(d)
+}
