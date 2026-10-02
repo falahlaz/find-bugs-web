@@ -98,9 +98,8 @@ func serve() error {
 	}
 	mon := watchdog.New(gp, sp, notifier, cfg.PublicURL)
 
-	cc := analyzer.ClaudeCode{Bin: cfg.Claude.Bin, Model: cfg.Claude.Model, Timeout: cfg.Claude.Timeout}
-	var an analyzer.Analyzer = cc
-	var tracer analyzer.Tracer = cc
+	var an analyzer.Analyzer = analyzer.ClaudeCode{Bin: cfg.Claude.Bin, Model: cfg.Claude.Model, Timeout: cfg.Claude.Timeout}
+	var tracer analyzer.Tracer = analyzer.ClaudeCode{Bin: cfg.Claude.Bin, Model: cfg.GitLab.Model, Timeout: cfg.GitLab.TraceTimeout}
 	if cfg.Analyzer == "fake" {
 		an, tracer = analyzer.Fake{}, analyzer.Fake{}
 	}
@@ -115,7 +114,7 @@ func serve() error {
 			Dir: g.ReposDir, Group: g.Group, RepoMap: g.RepoMap, Ref: g.Ref, Timeout: g.Timeout,
 		})
 		wk.Tracer = tracer
-		slog.Info("code tracing enabled", "gitlab", g.URL, "dir", g.ReposDir, "ref", g.Ref)
+		slog.Info("code tracing enabled", "gitlab", g.URL, "dir", g.ReposDir, "ref", g.Ref, "model", g.Model)
 	} else {
 		slog.Info("code tracing disabled (set GITLAB_URL and GITLAB_TOKEN to enable)")
 	}

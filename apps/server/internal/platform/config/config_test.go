@@ -36,7 +36,8 @@ func TestLoadGitLab(t *testing.T) {
 	t.Setenv("SPLUNK_SSO_DOMAIN", "login.example.com")
 	t.Setenv("SPLUNK_SPL_TEMPLATES", `{"prod":"index=a {transaction_id}"}`)
 	c, err := Load(true)
-	if err != nil || c.GitLab.Enabled() || c.GitLab.Username != "oauth2" || c.GitLab.Ref != "main" || c.GitLab.Group != "my-telkomsel" {
+	if err != nil || c.GitLab.Enabled() || c.GitLab.Username != "oauth2" || c.GitLab.Ref != "main" || c.GitLab.Group != "my-telkomsel" ||
+		c.GitLab.Model != "claude-opus-5-5" || c.GitLab.TraceTimeout != 8*time.Minute {
 		t.Fatalf("defaults = %+v, %v", c.GitLab, err)
 	}
 
