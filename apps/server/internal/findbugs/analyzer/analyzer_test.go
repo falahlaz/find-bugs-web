@@ -26,6 +26,9 @@ func TestUserPrompt(t *testing.T) {
 	if !strings.Contains(p, "Transaction ID: abc-1") || !strings.Contains(p, "./logs.txt (3.0 MB)") {
 		t.Errorf("prompt = %s", p)
 	}
+	if !strings.Contains(SystemPrompt, "Bahasa Indonesia") {
+		t.Error("system prompt should ask for Bahasa Indonesia")
+	}
 }
 
 func writeLogs(t *testing.T, s string) string {
