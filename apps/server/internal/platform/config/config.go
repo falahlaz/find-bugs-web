@@ -61,6 +61,7 @@ type Splunk struct {
 	SessionPath       string
 	SSODomain         string
 	SkipTLSVerify     bool
+	RequestTimeout    time.Duration // per HTTP request to Splunk
 	ResultWaitTimeout time.Duration
 	PollInterval      time.Duration
 	MaxLogLines       int
@@ -201,6 +202,7 @@ func Load(full bool) (Config, error) {
 	c.Splunk = Splunk{
 		SessionPath:       l.str("SPLUNK_API_SESSION_PATH", "data/splunk_api_session.json"),
 		SkipTLSVerify:     l.bool("SPLUNK_SKIP_SSL_VERIFY", false),
+		RequestTimeout:    time.Duration(l.int("SPLUNK_REQUEST_TIMEOUT", 300)) * time.Second,
 		ResultWaitTimeout: time.Duration(l.int("SPLUNK_RESULT_WAIT_TIMEOUT", 30)) * time.Second,
 		PollInterval:      time.Duration(l.int("SPLUNK_POLL_INTERVAL", 2)) * time.Second,
 		MaxLogLines:       l.int("MAX_LOG_LINES", 5000),

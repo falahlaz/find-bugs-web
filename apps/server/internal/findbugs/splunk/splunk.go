@@ -104,11 +104,15 @@ func New(cfg config.Splunk) *Client {
 	if cfg.SkipTLSVerify {
 		tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // opt-in for corporate MITM proxies
 	}
+	timeout := cfg.RequestTimeout
+	if timeout <= 0 {
+		timeout = 5 * time.Minute
+	}
 	return &Client{
 		cfg: cfg,
 		http: &http.Client{
 			Transport:     tr,
-			Timeout:       30 * time.Second,
+			Timeout:       timeout,
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
 	}
