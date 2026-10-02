@@ -570,6 +570,12 @@
           "likelyCause": {
             "type": "string"
           },
+          "linkedIds": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "llmFailed": {
             "type": "boolean"
           },

@@ -335,3 +335,64 @@ func TestAnalyzerReadsFullLogFile(t *testing.T) {
 		t.Errorf("log file not purged: %v", err)
 	}
 }
+
+func TestFollowsLinkedBackendIDs(t *testing.T) {
+	var path string
+	e := setup(t, recordingAnalyzer{&path})
+	e.w.Cfg.CorrelationMaxIDs = 5
+	apiReq := func(id string) string {
+		return `{"tags":["API Request"],"data":{"_id":"` + id + `","status":400,"mobileapptransactionid":"C-1"}}`
+	}
+	// Two client attempts, each logged by the backend under its own _id; the
+	// second attempt's backend id has no logs of its own.
+	e.fake.SetLogs("C-1", `{"data":{"transactionid":"C-1","msg":"payload"}}`, apiReq("B-1"), apiReq("B-2"))
+	e.fake.SetLogs("B-1", apiReq("B-1"), `{"level":"error","data":{"_id":"B-1","msg":"backend validation failed"}}`)
+	j := e.submit(t, "C-1")
+	e.step(t)
+	if got := e.job(t, j.ID); got.Status != store.StatusDone {
+		t.Fatalf("job = %+v", got)
+	}
+	if len(e.fake.Searches) != 3 || !strings.HasSuffix(e.fake.Searches[1], "B-1 NOT kong") || !strings.HasSuffix(e.fake.Searches[2], "B-2 NOT kong") {
+		t.Fatalf("searches = %q", e.fake.Searches)
+	}
+	inv, err := e.st.GetInvestigation(context.Background(), j.ID)
+	if err != nil || len(inv.LinkedIDs) != 1 || inv.LinkedIDs[0] != "B-1" {
+		t.Fatalf("linked = %v, %v", inv.LinkedIDs, err)
+	}
+	b, _ := os.ReadFile(path)
+	text := string(b)
+	for _, want := range []string{"Linked backend IDs: B-1\n", "payload", "backend validation failed"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("log file missing %q:\n%s", want, text)
+		}
+	}
+
+	// Searching the backend id directly does not hop again.
+	e.fake.Searches = nil
+	e.submit(t, "B-1")
+	e.step(t)
+	if len(e.fake.Searches) != 1 {
+		t.Errorf("searches = %q", e.fake.Searches)
+	}
+}
+
+func TestMergeResultsDedupesAndSorts(t *testing.T) {
+	ev := func(ts, raw string) splunk.Event { return splunk.Event{Time: ts, Raw: raw} }
+	a := splunk.Result{Status: splunk.ResultSuccess, EventCount: 2, Events: []splunk.Event{
+		ev("2026-10-02T09:46:18.266+07:00", "payload"), ev("2026-10-02T09:46:29.176+07:00", "api request"),
+	}}
+	b := splunk.Result{Status: splunk.ResultSuccess, EventCount: 2, Truncated: true, Events: []splunk.Event{
+		ev("2026-10-02T09:46:20.000+07:00", "backend error"), ev("2026-10-02T09:46:29.176+07:00", "api request"),
+	}}
+	got := mergeResults(a, b)
+	var raws []string
+	for _, e := range got.Events {
+		raws = append(raws, e.Raw)
+	}
+	if strings.Join(raws, ",") != "payload,backend error,api request" || !got.Truncated || got.EventCount != 4 {
+		t.Fatalf("merged = %+v", got)
+	}
+	if !strings.HasPrefix(got.Logs, "[2026-10-02T09:46:18.266+07:00] payload\n") {
+		t.Errorf("logs = %q", got.Logs)
+	}
+}

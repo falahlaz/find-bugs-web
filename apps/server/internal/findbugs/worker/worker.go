@@ -43,7 +43,10 @@ type Config struct {
 	JobTimeout    time.Duration // hard limit per job
 	IdlePoll      time.Duration // how often to look for work when idle
 	LogDir        string        // per-job Splunk result files for the analyzer
-	PublicURL     string
+	// CorrelationMaxIDs caps how many linked backend IDs are re-searched per
+	// job (see package correlation); 0 turns the extra searches off.
+	CorrelationMaxIDs int
+	PublicURL         string
 }
 
 // Worker processes jobs.
@@ -223,14 +226,17 @@ func (w *Worker) run(parent context.Context, job store.Job) {
 		return
 	}
 
+	// Some services log under their own backend _id; follow it.
+	res, linked := w.followBackendIDs(ctx, log, job, res)
+
 	// 3. AI analysis. Logs are redacted before they are stored or sent; the
 	// analyzer reads every fetched event from the job's log file.
 	w.set(parent, job.ID, store.Transition{Status: store.StatusAnalyzing, Stamp: "search_done_at"})
 	logs := redact.Logs(res.Logs, 0)
-	inv := store.Investigation{JobID: job.ID, RawLogSnippet: redact.Tail(logs, RawSnippetChars), RelevantLogs: []string{}}
-	log.Info("logs fetched", "events", len(res.Events), "matched", res.EventCount, "truncated", res.Truncated)
+	inv := store.Investigation{JobID: job.ID, RawLogSnippet: redact.Tail(logs, RawSnippetChars), RelevantLogs: []string{}, LinkedIDs: linked}
+	log.Info("logs fetched", "events", len(res.Events), "matched", res.EventCount, "truncated", res.Truncated, "linked_ids", linked)
 	var d analyzer.Diagnosis
-	path, aerr := writeLogFile(w.Cfg.LogDir, job, res)
+	path, aerr := writeLogFile(w.Cfg.LogDir, job, res, linked)
 	if aerr == nil {
 		d, aerr = w.Analyzer.Analyze(ctx, job.TransactionID, path)
 	}

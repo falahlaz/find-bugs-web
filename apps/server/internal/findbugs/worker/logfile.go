@@ -22,12 +22,12 @@ func logFilePath(dir string, jobID int64) string {
 
 // writeLogFile writes every fetched event to the job's log file (dir 0700,
 // file 0600) and returns its path.
-func writeLogFile(dir string, job store.Job, res splunk.Result) (string, error) {
+func writeLogFile(dir string, job store.Job, res splunk.Result, linked []string) (string, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return "", err
 	}
 	path := logFilePath(dir, job.ID)
-	if err := os.WriteFile(path, []byte(formatLogFile(job, res)), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(formatLogFile(job, res, linked)), 0o600); err != nil {
 		return "", err
 	}
 	return path, nil
@@ -40,9 +40,13 @@ const maxLineChars = 2000
 // formatLogFile renders a header and one numbered, redacted block per event,
 // oldest first. JSON events are indented and long lines wrapped (after
 // redaction, which can lengthen them), so the analyzer can read every byte.
-func formatLogFile(job store.Job, res splunk.Result) string {
+func formatLogFile(job store.Job, res splunk.Result, linked []string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Transaction ID: %s\nEnvironment: %s\nTime range: last %s\n", job.TransactionID, job.Environment, job.TimeRange)
+	if len(linked) > 0 {
+		fmt.Fprintf(&b, "Linked backend IDs: %s\n", strings.Join(linked, ", "))
+		b.WriteString("NOTE: the backend service logs this transaction under its own \"_id\" (one per client attempt), linked to the transaction ID by the \"API Request\" event. Events for all these IDs are merged below; the ID difference is expected, not an anomaly.\n")
+	}
 	fmt.Fprintf(&b, "Events: %d (oldest first)\n", len(res.Events))
 	if res.Truncated {
 		fmt.Fprintf(&b, "NOTE: the search matched %d events; only the newest %d are included.\n", res.EventCount, len(res.Events))

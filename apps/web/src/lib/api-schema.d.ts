@@ -512,6 +512,7 @@ export interface components {
             errorType?: string;
             failedComponent?: string;
             likelyCause?: string;
+            linkedIds?: string[];
             llmFailed: boolean;
             qaMessage?: string;
             rawLogSnippet?: string;

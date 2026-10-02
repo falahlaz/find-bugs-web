@@ -57,12 +57,15 @@ type JobView struct {
 // Result is the diagnosis. QA users get summary, severity and error source
 // with a friendly message; engineers get every field and the raw log tail.
 type Result struct {
-	Summary         string   `json:"summary,omitempty"`
-	Severity        string   `json:"severity,omitempty" enum:"low,medium,high,critical"`
-	ErrorSource     string   `json:"errorSource,omitempty" enum:"esb,tibco,internal,unknown"`
-	SourceLabel     string   `json:"sourceLabel,omitempty"`
-	QAMessage       string   `json:"qaMessage,omitempty"`
-	LLMFailed       bool     `json:"llmFailed"`
+	Summary     string `json:"summary,omitempty"`
+	Severity    string `json:"severity,omitempty" enum:"low,medium,high,critical"`
+	ErrorSource string `json:"errorSource,omitempty" enum:"esb,tibco,internal,unknown"`
+	SourceLabel string `json:"sourceLabel,omitempty"`
+	QAMessage   string `json:"qaMessage,omitempty"`
+	LLMFailed   bool   `json:"llmFailed"`
+	// LinkedIDs are backend IDs the service logged this transaction under;
+	// their logs were included in the analysis.
+	LinkedIDs       []string `json:"linkedIds,omitempty"`
 	ErrorType       string   `json:"errorType,omitempty"`
 	FailedComponent string   `json:"failedComponent,omitempty"`
 	LikelyCause     string   `json:"likelyCause,omitempty"`

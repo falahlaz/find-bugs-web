@@ -31,6 +31,21 @@ export function ResultView({ result, engineer }: { result: Result; engineer: boo
           )}
           <Field label="Ringkasan" value={result.summary} />
           {result.qaMessage && <p className="text-sm text-muted-foreground">{result.qaMessage}</p>}
+          {result.linkedIds && result.linkedIds.length > 0 && (
+            <div className="grid gap-1">
+              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">ID backend terkait</div>
+              <div className="flex flex-wrap gap-2">
+                {result.linkedIds.map((id) => (
+                  <code key={id} className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
+                    {id}
+                  </code>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Service mencatat transaksi ini dengan ID sendiri; log dari ID tersebut ikut dianalisis.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
