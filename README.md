@@ -14,7 +14,7 @@ docs/          PRD
 
 - **Fase 1 (pipeline headless):** selesai. Semua endpoint API jalan dan teruji.
 - **Fase 2 (website QA):** selesai. Login, form submit (transaction ID/curl, environment, 24h/48h), deteksi duplikat 24 jam dengan "Jalankan ulang", halaman job dengan progres per tahap (polling 2,5 detik), hasil QA vs laporan engineer, batalkan job yang masih antre, histori dengan filter, dan notifikasi browser saat job selesai.
-- **Fase 3 (panel VPN, Splunk, Engineer):** selesai. Panel VPN untuk semua user (Connect, link login SSO, paste callback, Disconnect, status nyata, log diredaksi), panel Splunk (status sesi, Re-auth dengan status menunggu 2FA, output login terakhir), manajemen user dan audit log untuk Engineer.
+- **Fase 3 (panel VPN, Splunk, Engineer):** selesai. Halaman Koneksi (`/koneksi`) menggabungkan VPN dan Splunk berurutan: VPN untuk semua user (Connect, link login SSO, paste callback, Disconnect, status nyata, log diredaksi), lalu Splunk (status sesi, Re-auth dengan status menunggu 2FA, output login terakhir), manajemen user dan audit log untuk Engineer.
 - **Fase 4 (deploy & cut-over):** ikuti bagian Deploy di bawah, lalu uji di VM dengan GlobalProtect, Splunk, dan Claude Code asli.
 
 ## Development

@@ -2,13 +2,13 @@ import { Link, NavLink, Navigate, Outlet, useLocation } from 'react-router'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAuth } from './auth-context'
+import { ThemeToggle } from './theme-toggle'
 import { useSystemStatus } from './use-system-status'
 
 const nav = [
   { to: '/', label: 'Submit', end: true },
   { to: '/jobs', label: 'Histori' },
-  { to: '/vpn', label: 'VPN' },
-  { to: '/splunk', label: 'Splunk' },
+  { to: '/koneksi', label: 'Koneksi' },
 ]
 
 function Banners() {
@@ -22,14 +22,14 @@ function Banners() {
           className={cn(
             'px-6 py-2 text-sm',
             b.level === 'error' && 'bg-destructive/10 text-destructive',
-            b.level === 'warning' && 'bg-amber-100 text-amber-900',
+            b.level === 'warning' && 'bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200',
             b.level === 'info' && 'bg-secondary text-secondary-foreground',
           )}
         >
           {b.message}{' '}
           {b.action && (
-            <Link to={`/${b.action}`} className="font-medium underline">
-              Buka panel {b.action === 'vpn' ? 'VPN' : 'Splunk'}
+            <Link to={`/koneksi#${b.action}`} className="font-medium underline">
+              Buka halaman Koneksi
             </Link>
           )}
         </div>
@@ -64,6 +64,7 @@ export function Layout() {
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-3 text-sm">
+          <ThemeToggle />
           <span className="text-muted-foreground">
             {user.username} · {user.role === 'engineer' ? 'Engineer' : 'QA'}
           </span>

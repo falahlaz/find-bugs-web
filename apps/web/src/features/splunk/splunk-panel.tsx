@@ -3,20 +3,25 @@ import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Row } from '@/components/ui/row'
 import { useTimezone } from '@/features/findbugs/queries'
 import { formatDateTime, formatDuration } from '@/lib/format'
+import { cn } from '@/lib/utils'
 import { useSplunkReauth, useSplunkStatus } from './queries'
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="grid grid-cols-[10rem_1fr] gap-2 text-sm">
-      <div className="text-muted-foreground">{label}</div>
-      <div className="min-w-0 break-words">{children}</div>
-    </div>
-  )
+
+/** Session badge; shared with the summary on the Koneksi page. */
+export function SplunkBadge() {
+  const { data: s } = useSplunkStatus()
+  if (s?.reauthing || s?.session.reauthRunning) return <Badge tone="info">Menunggu 2FA</Badge>
+  if (s?.paused) return <Badge tone="danger">Kedaluwarsa · antrean dijeda</Badge>
+  if (s?.ok) return <Badge tone="success">Aktif</Badge>
+  if (s) return <Badge tone="warning">Tidak bisa dicek</Badge>
+  return <Badge tone="neutral">Belum dicek</Badge>
 }
 
-export function SplunkPage() {
+/** `highlight` marks the re-auth card as the next step (VPN just came up but the session isn't active). */
+export function SplunkPanel({ highlight = false }: { highlight?: boolean }) {
   const tz = useTimezone()
   const status = useSplunkStatus()
   const system = useSystemStatus()
@@ -25,18 +30,12 @@ export function SplunkPage() {
   const running = Boolean(s?.reauthing || s?.session.reauthRunning)
   const vpnUp = system.data?.vpn.healthy ?? false
 
-  let badge = <Badge tone="neutral">Belum dicek</Badge>
-  if (running) badge = <Badge tone="info">Menunggu 2FA</Badge>
-  else if (s?.paused) badge = <Badge tone="danger">Kedaluwarsa · antrean dijeda</Badge>
-  else if (s?.ok) badge = <Badge tone="success">Aktif</Badge>
-  else if (s) badge = <Badge tone="warning">Tidak bisa dicek</Badge>
-
   return (
     <div className="grid gap-6">
       <Card>
         <CardHeader className="flex flex-row flex-wrap items-center gap-3">
           <CardTitle>Sesi Splunk</CardTitle>
-          {badge}
+          <SplunkBadge />
         </CardHeader>
         <CardContent className="grid gap-2">
           {status.error && <Alert tone="danger">{status.error.message}</Alert>}
@@ -61,7 +60,7 @@ export function SplunkPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className={cn(highlight && 'border-sky-400 ring-2 ring-sky-400/40 dark:border-sky-500')}>
         <CardHeader>
           <CardTitle>Login ulang (Re-auth)</CardTitle>
           <CardDescription>
@@ -70,7 +69,8 @@ export function SplunkPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
-          {!vpnUp && <Alert tone="warning">VPN belum tersambung. Sambungkan VPN dulu di panel VPN.</Alert>}
+          {!vpnUp && <Alert tone="warning">VPN belum tersambung. Sambungkan VPN dulu di langkah 1 di atas.</Alert>}
+          {highlight && <Alert tone="info">VPN sudah tersambung, tapi sesi Splunk belum aktif. Lanjutkan dengan klik Re-auth.</Alert>}
           <div>
             <Button onClick={() => reauth.mutate()} disabled={!vpnUp || running || reauth.isPending}>
               {running ? 'Menunggu approve 2FA…' : 'Re-auth'}
