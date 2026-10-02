@@ -13,6 +13,7 @@ import (
 
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/jobs"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/splunk"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/tracechat"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/watchdog"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/auth"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/config"
@@ -47,6 +48,8 @@ type API struct {
 	VPN     VPN
 	Splunk  Splunk
 	Monitor *watchdog.Monitor
+	// Trace serves the code trace chat; nil when tracing is off.
+	Trace   *tracechat.Service
 	Web     fs.FS // React build (index.html + assets); nil in tests
 	Version string
 	// BaseCtx outlives requests (for background re-auth).
@@ -126,6 +129,7 @@ func (a *API) registerRoutes() {
 		resps: map[int]any{200: JobView{}}, h: a.getJob})
 	a.add(route{method: "POST", path: "/api/jobs/{id}/cancel", summary: "Cancel a pending job", tag: "jobs", opID: "cancelJob",
 		resps: map[int]any{200: JobView{}}, h: a.cancelJob})
+	a.registerTraceRoutes()
 
 	a.add(route{method: "POST", path: "/api/vpn/connect", summary: "Start GlobalProtect connect", tag: "vpn", opID: "vpnConnect",
 		resps: map[int]any{202: VPNStateResponse{}}, h: a.vpnConnect})

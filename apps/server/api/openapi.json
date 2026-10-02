@@ -899,6 +899,248 @@
         ],
         "type": "object"
       },
+      "TraceAskRequest": {
+        "properties": {
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "type": "object"
+      },
+      "TraceBranch": {
+        "properties": {
+          "commit": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "commit",
+          "name"
+        ],
+        "type": "object"
+      },
+      "TraceEnvDeployment": {
+        "properties": {
+          "commit": {
+            "type": "string"
+          },
+          "env": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "finishedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "env"
+        ],
+        "type": "object"
+      },
+      "TraceMessage": {
+        "properties": {
+          "codeTrace": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CodeTrace"
+              }
+            ],
+            "nullable": true
+          },
+          "content": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "finishedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "progress": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "role": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "content",
+          "createdAt",
+          "id",
+          "kind",
+          "progress",
+          "role",
+          "status"
+        ],
+        "type": "object"
+      },
+      "TraceRefsResponse": {
+        "properties": {
+          "branches": {
+            "items": {
+              "$ref": "#/components/schemas/TraceBranch"
+            },
+            "type": "array"
+          },
+          "deployments": {
+            "items": {
+              "$ref": "#/components/schemas/TraceEnvDeployment"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "branches",
+          "deployments"
+        ],
+        "type": "object"
+      },
+      "TraceRepoView": {
+        "properties": {
+          "commit": {
+            "type": "string"
+          },
+          "env": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "refSource": {
+            "enum": [
+              "deployed",
+              "fallback",
+              "manual"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "commit",
+          "project",
+          "ref",
+          "refSource"
+        ],
+        "type": "object"
+      },
+      "TraceRetraceRequest": {
+        "properties": {
+          "env": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "type": "object"
+      },
+      "TraceSessionView": {
+        "properties": {
+          "busy": {
+            "description": "A question or re-trace is being answered",
+            "type": "boolean"
+          },
+          "envs": {
+            "description": "GitLab environments offered for a re-trace",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "idleClosed": {
+            "description": "Closed because nobody wrote for idleMinutes",
+            "type": "boolean"
+          },
+          "idleMinutes": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "lastActivityAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/TraceMessage"
+            },
+            "type": "array"
+          },
+          "repos": {
+            "description": "Checkouts the session can read",
+            "items": {
+              "$ref": "#/components/schemas/TraceRepoView"
+            },
+            "type": "array"
+          },
+          "state": {
+            "description": "open but idle sessions show as closed",
+            "enum": [
+              "open",
+              "closed",
+              "purged"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "busy",
+          "envs",
+          "idleClosed",
+          "idleMinutes",
+          "lastActivityAt",
+          "messages",
+          "repos",
+          "state"
+        ],
+        "type": "object"
+      },
       "UpdateUserRequest": {
         "properties": {
           "active": {
@@ -1454,6 +1696,342 @@
         "summary": "Cancel a pending job",
         "tags": [
           "jobs"
+        ]
+      }
+    },
+    "/api/jobs/{id}/trace": {
+      "get": {
+        "operationId": "getTrace",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceSessionView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Code trace chat",
+        "tags": [
+          "trace"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
+      }
+    },
+    "/api/jobs/{id}/trace/close": {
+      "post": {
+        "operationId": "closeTrace",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceSessionView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Close the code trace chat",
+        "tags": [
+          "trace"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
+      }
+    },
+    "/api/jobs/{id}/trace/messages": {
+      "post": {
+        "operationId": "askTrace",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TraceAskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceSessionView"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Ask about the code trace",
+        "tags": [
+          "trace"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
+      }
+    },
+    "/api/jobs/{id}/trace/refs": {
+      "get": {
+        "operationId": "traceRefs",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "project",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceRefsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Deployed commits and branches to re-trace into",
+        "tags": [
+          "trace"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
+      }
+    },
+    "/api/jobs/{id}/trace/reopen": {
+      "post": {
+        "operationId": "reopenTrace",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceSessionView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Reopen the code trace chat",
+        "tags": [
+          "trace"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
+      }
+    },
+    "/api/jobs/{id}/trace/retrace": {
+      "post": {
+        "operationId": "retrace",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TraceRetraceRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TraceSessionView"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Trace the error in another version",
+        "tags": [
+          "trace"
+        ],
+        "x-roles": [
+          "engineer"
         ]
       }
     },

@@ -131,6 +131,34 @@ type GitLab struct {
 	ChatConcurrency int
 }
 
+// Environments lists the GitLab environments of an env map once each, the
+// usual promotion order first.
+func Environments(envMap map[string]string) []string {
+	rank := map[string]int{"dev": 1, "staging": 2, "preprod": 3, "blue": 4, "production": 5}
+	seen := map[string]bool{}
+	var out []string
+	for _, e := range envMap {
+		if e != "" && !seen[e] {
+			seen[e] = true
+			out = append(out, e)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool {
+		ri, rj := rank[out[i]], rank[out[j]]
+		if ri == 0 {
+			ri = 99
+		}
+		if rj == 0 {
+			rj = 99
+		}
+		if ri != rj {
+			return ri < rj
+		}
+		return out[i] < out[j]
+	})
+	return out
+}
+
 // DefaultEnvMap is GITLAB_ENV_MAP when unset.
 var DefaultEnvMap = map[string]string{
 	"tdw-dev": "dev", "tdw-staging": "staging", "tdw-preprod": "preprod", "blue": "blue", "tdw-webapi": "production",

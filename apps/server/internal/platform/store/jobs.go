@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -403,6 +404,17 @@ type CodeTrace struct {
 	Model        string `json:"model,omitempty"`
 }
 
+// SetURL links a found trace to its line in GitLab at base.
+func (c *CodeTrace) SetURL(base string) {
+	if c.Status != TraceFound || base == "" || c.Project == "" || c.Commit == "" || c.File == "" {
+		return
+	}
+	c.URL = fmt.Sprintf("%s/%s/-/blob/%s/%s", base, c.Project, c.Commit, c.File)
+	if c.Line > 0 {
+		c.URL += fmt.Sprintf("#L%d", c.Line)
+	}
+}
+
 // CodeTrace ref sources.
 const (
 	RefDeployed = "deployed"
@@ -485,11 +497,17 @@ func (s *Store) PurgeRawLogs(ctx context.Context, cutoff time.Time) (int64, erro
 	return res.RowsAffected()
 }
 
-// PurgeDiagnoses deletes investigations created before cutoff; job metadata stays.
+// PurgeDiagnoses deletes investigations created before cutoff, with their
+// code trace chats; job metadata stays.
 func (s *Store) PurgeDiagnoses(ctx context.Context, cutoff time.Time) (int64, error) {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM investigations WHERE created_at < ?`, ts(cutoff))
 	if err != nil {
 		return 0, err
+	}
+	for _, table := range []string{"trace_messages", "trace_sessions"} {
+		if _, err := s.db.ExecContext(ctx, `DELETE FROM `+table+` WHERE job_id NOT IN (SELECT job_id FROM investigations)`); err != nil {
+			return 0, err
+		}
 	}
 	return res.RowsAffected()
 }

@@ -9,11 +9,26 @@ esac
 # Prove only read-only tools are enabled, the prompt arrived on stdin and the
 # log file sits in the working directory.
 case "$*" in *"--tools Read,Grep,Glob --permission-mode dontAsk "*) ;; *) echo "tool flags missing" >&2; exit 3 ;; esac
-# Tracing pass: the repo is readable through --add-dir and named in the prompt.
+# Trace sessions: streamed events, a session ID or resume, the repos
+# readable through --add-dir and the logs in the working directory.
 case "$*" in *"--add-dir "*)
-	case "$input" in *"Service checkouts"*"grp/svc → "*) ;; *) echo "trace prompt missing" >&2; exit 6 ;; esac
+	case "$*" in *"--output-format stream-json --verbose "*) ;; *) echo "stream flags missing" >&2; exit 7 ;; esac
+	case "$*" in *"--session-id "*|*"--resume "*) ;; *) echo "session flag missing" >&2; exit 8 ;; esac
+	case "$*" in *"--no-session-persistence"*) echo "session not persisted" >&2; exit 9 ;; esac
 	grep -q "ERROR 504" logs.txt || { echo "logs.txt missing" >&2; exit 5; }
 	dir=${*##*--add-dir }
+	echo '{"type":"system","subtype":"init"}'
+	echo "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"thinking\"},{\"type\":\"tool_use\",\"name\":\"Read\",\"input\":{\"file_path\":\"$dir/server/a.js\"}}]}}"
+	echo '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Grep","input":{"pattern":"ERROR 504","path":"logs.txt"}}]}}'
+	case "$input" in
+	*"An engineer asks:"*)
+		case "$input" in *"was restarted"*) r="Jawaban dengan recap" ;; *) r="Jawaban: baris 12" ;; esac
+		echo "{\"type\":\"result\",\"is_error\":false,\"result\":\"$r\",\"modelUsage\":{\"m\":{}}}"
+		exit 0 ;;
+	*"another version of"*) ;;
+	*"Service checkouts"*"grp/svc → "*) ;;
+	*) echo "trace prompt missing" >&2; exit 6 ;;
+	esac
 	cat <<J
 {"type":"result","is_error":false,"result":"{\"status\":\"found\",\"project\":\"grp/svc\",\"file\":\"$dir/server/a.js\",\"line\":12,\"function\":\"pay\",\"snippet\":\"x()\",\"explanation\":\"null\"}","modelUsage":{"m":{}}}
 J

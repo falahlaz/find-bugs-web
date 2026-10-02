@@ -58,6 +58,9 @@ func TestLoadGitLab(t *testing.T) {
 	if c, err := Load(true); err != nil || len(c.GitLab.EnvMap) != 1 || c.GitLab.EnvMap["ns-a"] != "dev" {
 		t.Errorf("env map = %v, %v", c.GitLab.EnvMap, err)
 	}
+	if got := strings.Join(Environments(map[string]string{"a": "production", "b": "dev", "c": "zzz", "d": "dev", "e": "blue"}), ","); got != "dev,blue,production,zzz" {
+		t.Errorf("Environments = %s", got)
+	}
 	t.Setenv("GITLAB_ENV_MAP", `[1]`)
 	if _, err := Load(true); err == nil || !strings.Contains(err.Error(), "GITLAB_ENV_MAP") {
 		t.Errorf("bad env map err = %v", err)

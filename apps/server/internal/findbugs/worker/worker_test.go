@@ -454,7 +454,10 @@ func TestCodeTrace(t *testing.T) {
 	e.w.Repos, e.w.Tracer = fakeRepos{}, analyzer.Fake{}
 	e.w.Cfg.GitLabURL = "https://gitlab.example.com"
 	e.w.Cfg.EnvMap = map[string]string{"tdw-dev": "dev"}
+	e.w.Cfg.SessionDir = t.TempDir()
 	ctx := context.Background()
+	logPath := filepath.Join(t.TempDir(), "job.log")
+	os.WriteFile(logPath, []byte("#1 [t] ERROR boom\n"), 0o600)
 
 	// The fake Splunk's events carry no pod log path: nothing to trace into.
 	e.fake.SetLogs("abc-1", "ERROR boom")
@@ -471,7 +474,7 @@ func TestCodeTrace(t *testing.T) {
 	log := slog.Default()
 
 	// No deployment lookup configured: the default branch, with a note.
-	ct := e.w.traceCode(ctx, log, j, "logs", analyzer.Diagnosis{}, []splunk.Event{pod("tdw-dev", "svc"), pod("tdw-dev", "svc"), pod("tdw-dev", "gw")})
+	ct := e.w.traceCode(ctx, log, j, logPath, analyzer.Diagnosis{}, []splunk.Event{pod("tdw-dev", "svc"), pod("tdw-dev", "svc"), pod("tdw-dev", "gw")})
 	if ct.Status != store.TraceFound || ct.Project != "grp/svc" || ct.Commit != "c0ffee" || ct.Ref != "main" || ct.RefSource != store.RefFallback ||
 		ct.RefNote == "" || ct.URL != "https://gitlab.example.com/grp/svc/-/blob/c0ffee/README.md#L1" {
 		t.Fatalf("found trace = %+v", ct)
@@ -481,7 +484,7 @@ func TestCodeTrace(t *testing.T) {
 	deps := &fakeDeploys{}
 	e.w.Deploys = deps
 	sha := strings.Repeat("d", 40)
-	ct = e.w.traceCode(ctx, log, j, "logs", analyzer.Diagnosis{}, []splunk.Event{pod("tdw-dev", "svc")})
+	ct = e.w.traceCode(ctx, log, j, logPath, analyzer.Diagnosis{}, []splunk.Event{pod("tdw-dev", "svc")})
 	if ct.RefSource != store.RefDeployed || ct.Env != "dev" || ct.Commit != sha || ct.Ref != "release/9.5.0" ||
 		ct.DeployedAt != "2026-10-01T03:00:00Z" || ct.DeployJobURL != "https://g/jobs/9" || ct.URL != "https://gitlab.example.com/grp/svc/-/blob/"+sha+"/README.md#L1" {
 		t.Fatalf("deployed trace = %+v", ct)
@@ -489,32 +492,41 @@ func TestCodeTrace(t *testing.T) {
 	if len(deps.before) != 1 || !deps.before[0].Equal(time.Date(2026, 10, 2, 10, 41, 29, 502e6, time.UTC)) {
 		t.Fatalf("deployment looked up before %v", deps.before)
 	}
+	// The session is kept for follow-up questions, with the logs in it.
+	ts, err := e.st.GetTraceSession(ctx, j.ID)
+	if err != nil || ts.SessionID == "" || ts.State != store.TraceOpen || len(ts.Repos) != 1 || ts.Repos[0].Commit != sha ||
+		ts.Repos[0].RefSource != store.RefDeployed || ts.Repos[0].Env != "dev" || ts.Repos[0].Container != "svc" {
+		t.Fatalf("trace session = %+v, %v", ts, err)
+	}
+	if b, err := os.ReadFile(filepath.Join(ts.Dir, analyzer.LogFileName)); err != nil || !strings.Contains(string(b), "ERROR boom") {
+		t.Fatalf("session logs = %q, %v", b, err)
+	}
 
 	// Unknown namespace, missing deployment, or an unfetchable commit fall
 	// back to the default branch.
-	ct = e.w.traceCode(ctx, log, j, "logs", analyzer.Diagnosis{}, []splunk.Event{pod("other", "svc")})
+	ct = e.w.traceCode(ctx, log, j, logPath, analyzer.Diagnosis{}, []splunk.Event{pod("other", "svc")})
 	if ct.RefSource != store.RefFallback || !strings.Contains(ct.RefNote, "other") || ct.Env != "" {
 		t.Fatalf("unknown namespace trace = %+v", ct)
 	}
 	e.w.Deploys = &fakeDeploys{err: fmt.Errorf("x: %w", gitlab.ErrNotFound)}
-	ct = e.w.traceCode(ctx, log, j, "logs", analyzer.Diagnosis{}, []splunk.Event{pod("tdw-dev", "svc")})
+	ct = e.w.traceCode(ctx, log, j, logPath, analyzer.Diagnosis{}, []splunk.Event{pod("tdw-dev", "svc")})
 	if ct.RefSource != store.RefFallback || !strings.Contains(ct.RefNote, "deploy-eks:dev") || ct.Commit != "c0ffee" {
 		t.Fatalf("no deployment trace = %+v", ct)
 	}
 	e.w.Deploys = deps
 	e.w.Repos = fakeRepos{fail: map[string]bool{sha: true}}
-	ct = e.w.traceCode(ctx, log, j, "logs", analyzer.Diagnosis{}, []splunk.Event{pod("tdw-dev", "svc")})
+	ct = e.w.traceCode(ctx, log, j, logPath, analyzer.Diagnosis{}, []splunk.Event{pod("tdw-dev", "svc")})
 	if ct.RefSource != store.RefFallback || !strings.Contains(ct.RefNote, "dddddddd") || ct.Status != store.TraceFound {
 		t.Fatalf("deployed sync failure trace = %+v", ct)
 	}
 
 	e.w.Repos = fakeRepos{fail: map[string]bool{"svc": true}}
-	if ct := e.w.traceCode(ctx, log, j, "logs", analyzer.Diagnosis{}, []splunk.Event{pod("tdw-dev", "svc")}); ct.Status != store.TraceFailed || !strings.Contains(ct.Reason, "grp/svc: clone failed") {
+	if ct := e.w.traceCode(ctx, log, j, logPath, analyzer.Diagnosis{}, []splunk.Event{pod("tdw-dev", "svc")}); ct.Status != store.TraceFailed || !strings.Contains(ct.Reason, "grp/svc: clone failed") {
 		t.Fatalf("sync failure trace = %+v", ct)
 	}
 
 	e.w.Repos, e.w.Tracer = fakeRepos{}, analyzer.Fake{Err: errors.New("cli down")}
-	if ct := e.w.traceCode(ctx, log, j, "logs", analyzer.Diagnosis{}, []splunk.Event{pod("tdw-dev", "svc")}); ct.Status != store.TraceFailed || !strings.Contains(ct.Reason, "cli down") {
+	if ct := e.w.traceCode(ctx, log, j, logPath, analyzer.Diagnosis{}, []splunk.Event{pod("tdw-dev", "svc")}); ct.Status != store.TraceFailed || !strings.Contains(ct.Reason, "cli down") {
 		t.Fatalf("tracer failure trace = %+v", ct)
 	}
 }

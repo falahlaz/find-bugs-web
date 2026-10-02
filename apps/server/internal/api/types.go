@@ -178,3 +178,58 @@ type HealthResponse struct {
 	VPNHealthy bool `json:"vpnHealthy"`
 	SplunkOK   bool `json:"splunkOk"`
 }
+
+// TraceSessionView is the code trace chat of a job.
+type TraceSessionView struct {
+	State          string               `json:"state" enum:"open,closed,purged" doc:"open but idle sessions show as closed"`
+	Busy           bool                 `json:"busy" doc:"A question or re-trace is being answered"`
+	IdleClosed     bool                 `json:"idleClosed" doc:"Closed because nobody wrote for idleMinutes"`
+	IdleMinutes    int                  `json:"idleMinutes"`
+	LastActivityAt time.Time            `json:"lastActivityAt"`
+	Repos          []TraceRepoView      `json:"repos" doc:"Checkouts the session can read"`
+	Envs           []string             `json:"envs" doc:"GitLab environments offered for a re-trace"`
+	Messages       []store.TraceMessage `json:"messages"`
+}
+
+// TraceRepoView is a checkout of a trace session.
+type TraceRepoView struct {
+	Project   string `json:"project"`
+	Commit    string `json:"commit"`
+	Ref       string `json:"ref"`
+	RefSource string `json:"refSource" enum:"deployed,fallback,manual"`
+	Env       string `json:"env,omitempty"`
+}
+
+// TraceAskRequest is a question about the trace.
+type TraceAskRequest struct {
+	Text string `json:"text"`
+}
+
+// TraceRetraceRequest asks for the error to be traced in another version:
+// the commit deployed now to env, or ref (branch, tag or commit).
+type TraceRetraceRequest struct {
+	Project string `json:"project"`
+	Env     string `json:"env,omitempty"`
+	Ref     string `json:"ref,omitempty"`
+}
+
+// TraceRefsResponse lists what a re-trace can target.
+type TraceRefsResponse struct {
+	Deployments []TraceEnvDeployment `json:"deployments"`
+	Branches    []TraceBranch        `json:"branches"`
+}
+
+// TraceEnvDeployment is the commit deployed now to an environment.
+type TraceEnvDeployment struct {
+	Env        string     `json:"env"`
+	Ref        string     `json:"ref,omitempty"`
+	Commit     string     `json:"commit,omitempty"`
+	FinishedAt *time.Time `json:"finishedAt,omitempty"`
+	Error      string     `json:"error,omitempty"`
+}
+
+// TraceBranch is a branch and its tip commit.
+type TraceBranch struct {
+	Name   string `json:"name"`
+	Commit string `json:"commit"`
+}

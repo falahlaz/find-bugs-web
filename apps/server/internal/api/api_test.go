@@ -34,6 +34,7 @@ type harness struct {
 	wk     *worker.Worker
 	mon    *watchdog.Monitor
 	splunk *splunktest.Fake
+	api    *API
 }
 
 func newHarness(t *testing.T) *harness {
@@ -80,7 +81,7 @@ func newHarness(t *testing.T) *harness {
 		h, _ := auth.HashPassword("password123")
 		st.CreateUser(ctx, u.name, h, u.role)
 	}
-	return &harness{t: t, srv: srv, st: st, wk: wk, mon: mon, splunk: fake}
+	return &harness{t: t, srv: srv, st: st, wk: wk, mon: mon, splunk: fake, api: a}
 }
 
 type client struct {

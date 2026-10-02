@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -57,6 +59,9 @@ type Config struct {
 	// EnvMap maps a Kubernetes namespace to the GitLab environment whose
 	// deployed commit is traced.
 	EnvMap map[string]string
+	// SessionDir holds one working directory per traced job, kept so the
+	// trace session can be continued.
+	SessionDir string
 }
 
 // RepoSyncer is the subset of repos.Manager used by the worker.
@@ -99,6 +104,9 @@ func New(st *store.Store, s Searcher, a analyzer.Analyzer, m Monitor, n notify.N
 	}
 	if cfg.LogDir == "" {
 		cfg.LogDir = "data/logs"
+	}
+	if cfg.SessionDir == "" {
+		cfg.SessionDir = "data/trace-sessions"
 	}
 	return &Worker{Store: st, Splunk: s, Analyzer: a, Monitor: m, Notify: n, Cfg: cfg, wake: make(chan struct{}, 1)}
 }
@@ -325,7 +333,11 @@ func (w *Worker) traceCode(ctx context.Context, log *slog.Logger, job store.Job,
 		return &store.CodeTrace{Status: store.TraceFailed, Reason: "Gagal mengambil repo dari GitLab (cek VPN dan token): " + redact.Sensitive(strings.Join(errs, "; "))}
 	}
 	log.Info("tracing code", "repos", len(rs))
-	t, err := w.Tracer.Trace(ctx, job.TransactionID, logPath, d, rs)
+	sess := analyzer.Session{ID: analyzer.NewSessionID(), Dir: filepath.Join(w.Cfg.SessionDir, fmt.Sprintf("job-%d", job.ID))}
+	if err := analyzer.PrepareSession(sess.Dir, logPath); err != nil {
+		return &store.CodeTrace{Status: store.TraceFailed, Reason: "Gagal menyiapkan sesi trace: " + redact.Sensitive(err.Error())}
+	}
+	t, err := w.Tracer.Trace(ctx, sess, job.TransactionID, d, rs, nil)
 	if err != nil {
 		log.Warn("code trace failed", "err", err)
 		reason := "Trace kode gagal: " + redact.Sensitive(err.Error())
@@ -340,6 +352,15 @@ func (w *Worker) traceCode(ctx context.Context, log *slog.Logger, job store.Job,
 	}
 	if co, ok := checkouts[t.Project]; ok {
 		co.Fill(ct, w.Cfg.GitLabURL)
+	}
+	// Keep the session so engineers can ask about the trace.
+	ts := store.TraceSession{JobID: job.ID, SessionID: sess.ID, Dir: sess.Dir}
+	for _, co := range checkouts {
+		ts.Repos = append(ts.Repos, co.TraceRepo())
+	}
+	sort.Slice(ts.Repos, func(i, j int) bool { return ts.Repos[i].Project < ts.Repos[j].Project })
+	if err := w.Store.SaveTraceSession(context.WithoutCancel(ctx), ts); err != nil {
+		log.Warn("save trace session", "err", err)
 	}
 	log.Info("code traced", "status", ct.Status, "project", ct.Project, "file", ct.File, "line", ct.Line, "ref", ct.Ref, "ref_source", ct.RefSource)
 	return ct
@@ -363,6 +384,14 @@ func (co Checkout) Repo() analyzer.Repo {
 	return r
 }
 
+// TraceRepo is the checkout as the trace session records it.
+func (co Checkout) TraceRepo() store.TraceRepo {
+	return store.TraceRepo{
+		Container: co.Container, Project: co.Project, Dir: co.Dir, Commit: co.Commit, Ref: co.Ref,
+		RefSource: co.RefSource, Env: co.Repo().Env,
+	}
+}
+
 // Fill copies the version details into a trace and links it to GitLab.
 func (co Checkout) Fill(ct *store.CodeTrace, gitlabURL string) {
 	ct.Ref, ct.Commit, ct.RefSource, ct.RefNote, ct.Env = co.Ref, co.Commit, co.RefSource, co.RefNote, co.Env
@@ -372,12 +401,7 @@ func (co Checkout) Fill(ct *store.CodeTrace, gitlabURL string) {
 		}
 		ct.DeployJobURL = co.Deploy.JobURL
 	}
-	if ct.Status == store.TraceFound && gitlabURL != "" {
-		ct.URL = fmt.Sprintf("%s/%s/-/blob/%s/%s", gitlabURL, co.Project, co.Commit, ct.File)
-		if ct.Line > 0 {
-			ct.URL += fmt.Sprintf("#L%d", ct.Line)
-		}
-	}
+	ct.SetURL(gitlabURL)
 }
 
 // checkout syncs the commit deployed in the target's environment when the

@@ -90,11 +90,17 @@ func TestParseTrace(t *testing.T) {
 func TestClaudeCodeTrace(t *testing.T) {
 	bin, _ := filepath.Abs("testdata/fake-claude.sh")
 	c := ClaudeCode{Bin: bin, Model: "m", Timeout: 2 * time.Second}
+	ctx := context.Background()
 	repo := t.TempDir()
-	repos := []Repo{{Project: "grp/svc", Dir: repo, Commit: "abc"}}
-	logs := writeLogs(t, "#1 [t] ERROR 504\n")
+	repos := []Repo{{Project: "grp/svc", Dir: repo, Commit: "abc", Ref: "main"}}
+	sess := Session{ID: NewSessionID(), Dir: filepath.Join(t.TempDir(), "job-1")}
+	if err := PrepareSession(sess.Dir, writeLogs(t, "#1 [t] ERROR 504\n")); err != nil {
+		t.Fatal(err)
+	}
+	var progress []string
+	onProgress := func(l string) { progress = append(progress, l) }
 	// The model points at a file the checkout does not have.
-	if tr, err := c.Trace(context.Background(), "abc-1", logs, Diagnosis{Summary: "s"}, repos); err != nil || tr.Status != "not_found" {
+	if tr, err := c.Trace(ctx, sess, "abc-1", Diagnosis{Summary: "s"}, repos, nil); err != nil || tr.Status != "not_found" {
 		t.Fatalf("Trace to a missing file = %+v, %v", tr, err)
 	}
 	os.MkdirAll(filepath.Join(repo, "server"), 0o755)
@@ -103,13 +109,64 @@ func TestClaudeCodeTrace(t *testing.T) {
 		fmt.Fprintf(&code, "line%d\n", i)
 	}
 	os.WriteFile(filepath.Join(repo, "server", "a.js"), []byte(code.String()), 0o644)
-	tr, err := c.Trace(context.Background(), "abc-1", logs, Diagnosis{Summary: "s"}, repos)
+	tr, err := c.Trace(ctx, sess, "abc-1", Diagnosis{Summary: "s"}, repos, onProgress)
 	if err != nil || tr.Status != "found" || tr.File != "server/a.js" || tr.Line != 12 || tr.Model != "m" ||
 		!strings.Contains(tr.Snippet, ">12 | line12") || !strings.HasPrefix(tr.Snippet, "  5 | line5") {
 		t.Fatalf("Trace = %+v, %v", tr, err)
 	}
-	if _, err := c.Trace(context.Background(), "abc-1", writeLogs(t, "x"), Diagnosis{}, nil); err == nil {
+	if strings.Join(progress, "|") != `Membaca grp/svc/server/a.js|Mencari "ERROR 504" di logs.txt` {
+		t.Fatalf("progress = %q", progress)
+	}
+	if _, err := c.Trace(ctx, sess, "abc-1", Diagnosis{}, nil, nil); err == nil {
 		t.Error("Trace without repos should fail")
+	}
+
+	// Follow-ups resume the session.
+	sess.Resume = true
+	if a, err := c.Ask(ctx, sess, "kenapa?", "", repos, nil); err != nil || a.Text != "Jawaban: baris 12" || a.Model != "m" {
+		t.Fatalf("Ask = %+v, %v", a, err)
+	}
+	if a, err := c.Ask(ctx, sess, "kenapa?", "dulu: x", repos, nil); err != nil || a.Text != "Jawaban dengan recap" {
+		t.Fatalf("Ask with recap = %+v, %v", a, err)
+	}
+	other := Repo{Project: "grp/svc", Dir: t.TempDir(), Commit: "def", Ref: "dev", Env: "dev"}
+	os.MkdirAll(filepath.Join(other.Dir, "server"), 0o755)
+	os.WriteFile(filepath.Join(other.Dir, "server", "a.js"), []byte(code.String()), 0o644)
+	if tr, err := c.Retrace(ctx, sess, other, "", append(repos, other), nil); err != nil || tr.Status != "found" || tr.Line != 12 {
+		t.Fatalf("Retrace = %+v, %v", tr, err)
+	}
+	t.Setenv("FAKE_CLAUDE", "error")
+	if _, err := c.Ask(ctx, sess, "x", "", repos, nil); err == nil || !strings.Contains(err.Error(), "API Error: 401") {
+		t.Fatalf("Ask error = %v", err)
+	}
+}
+
+func TestTraceArgsAndPrompts(t *testing.T) {
+	c := ClaudeCode{Model: "m"}
+	repos := []Repo{{Project: "g/a", Dir: "/w/a", Commit: "1", Ref: "9.4.1", Env: "production"}, {Project: "g/b", Dir: "/w/b", Commit: "2", Ref: "main"}}
+	args := strings.Join(c.TraceArgs(Session{ID: "u1"}, repos), " ")
+	if !strings.Contains(args, "--session-id u1") || strings.Contains(args, "--resume") || !strings.HasSuffix(args, "--add-dir /w/a --add-dir /w/b") {
+		t.Errorf("new session args = %s", args)
+	}
+	if args := strings.Join(c.TraceArgs(Session{ID: "u1", Resume: true}, repos), " "); !strings.Contains(args, "--resume u1") || strings.Contains(args, "--session-id") {
+		t.Errorf("resume args = %s", args)
+	}
+	p := TracePrompt("T1", Diagnosis{Summary: "s"}, repos)
+	if !strings.Contains(p, "g/a → /w/a (commit 1 from 9.4.1, the version deployed to production)") ||
+		!strings.Contains(p, "g/b → /w/b (commit 2 of main, which may differ from the deployed version)") {
+		t.Errorf("trace prompt:\n%s", p)
+	}
+	if p := AskPrompt("q?", "", repos); !strings.Contains(p, "An engineer asks:\n\nq?") || strings.Contains(p, "restarted") || strings.Contains(p, `"status"`) {
+		t.Errorf("ask prompt:\n%s", p)
+	}
+	if p := RetracePrompt(repos[1], "recap", repos); !strings.HasPrefix(p, "This conversation was restarted") || !strings.Contains(p, `set "project" to g/b`) {
+		t.Errorf("retrace prompt:\n%s", p)
+	}
+	if strings.Contains(TraceSystemPrompt, "single JSON object only") {
+		t.Error("the session-wide system prompt must not force JSON answers")
+	}
+	if id := NewSessionID(); len(id) != 36 || id[14] != '4' || id == NewSessionID() {
+		t.Errorf("NewSessionID = %s", id)
 	}
 }
 
