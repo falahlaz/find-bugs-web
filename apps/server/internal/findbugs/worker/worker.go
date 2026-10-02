@@ -253,7 +253,7 @@ func (w *Worker) run(parent context.Context, job store.Job) {
 	} else {
 		inv.Summary, inv.ErrorType, inv.FailedComponent = d.Summary, d.ErrorType, d.FailedComponent
 		inv.LikelyCause, inv.Severity, inv.SuggestedAction = d.LikelyCause, d.Severity, d.SuggestedAction
-		inv.ErrorSource = d.ErrorSource
+		inv.ErrorSource, inv.Model = d.ErrorSource, d.Model
 		for _, l := range d.RelevantLogs {
 			inv.RelevantLogs = append(inv.RelevantLogs, redact.Sensitive(l))
 		}
@@ -263,7 +263,7 @@ func (w *Worker) run(parent context.Context, job store.Job) {
 		return
 	}
 	w.set(parent, job.ID, store.Transition{Status: store.StatusDone, Stamp: "analyzed_at", FailureReason: reason})
-	log.Info("job done", "llm_failed", inv.LLMFailed)
+	log.Info("job done", "llm_failed", inv.LLMFailed, "model", inv.Model)
 }
 
 // searchFailure turns a Splunk error into a user-facing reason, noting a

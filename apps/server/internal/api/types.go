@@ -72,6 +72,8 @@ type Result struct {
 	SuggestedAction string   `json:"suggestedAction,omitempty"`
 	RelevantLogs    []string `json:"relevantLogs,omitempty"`
 	RawLogSnippet   string   `json:"rawLogSnippet,omitempty"`
+	// Model is the AI model(s) that produced the diagnosis (engineers only).
+	Model string `json:"model,omitempty"`
 }
 
 // JobListResponse is a page of jobs.

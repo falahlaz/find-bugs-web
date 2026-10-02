@@ -119,7 +119,7 @@ func TestHappyPathAndNoLogs(t *testing.T) {
 		t.Fatalf("job = %+v", got)
 	}
 	inv, err := e.st.GetInvestigation(context.Background(), j.ID)
-	if err != nil || inv.Summary == "" || len(inv.RelevantLogs) != 1 || inv.LLMFailed {
+	if err != nil || inv.Summary == "" || len(inv.RelevantLogs) != 1 || inv.LLMFailed || inv.Model != "fake" {
 		t.Fatalf("inv = %+v, %v", inv, err)
 	}
 	for _, leak := range []string{"a@b.com", "sekret"} {
@@ -205,7 +205,7 @@ func TestAnalyzerFailureKeepsRawLogs(t *testing.T) {
 	e.step(t)
 	got := e.job(t, j.ID)
 	inv, _ := e.st.GetInvestigation(context.Background(), j.ID)
-	if got.Status != store.StatusDone || !inv.LLMFailed || !strings.Contains(inv.RawLogSnippet, "ERROR x") {
+	if got.Status != store.StatusDone || !inv.LLMFailed || inv.Model != "" || !strings.Contains(inv.RawLogSnippet, "ERROR x") {
 		t.Fatalf("job=%+v inv=%+v", got, inv)
 	}
 }

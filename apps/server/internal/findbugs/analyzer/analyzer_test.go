@@ -45,6 +45,9 @@ func TestClaudeCode(t *testing.T) {
 	if err != nil || d.Summary != "ESB timeout" || d.Severity != "high" || d.ErrorSource != "esb" || len(d.RelevantLogs) != 1 {
 		t.Fatalf("Analyze = %+v, %v", d, err)
 	}
+	if d.Model != "claude-haiku-4-5-20251001" {
+		t.Errorf("Model = %q, want the model from modelUsage", d.Model)
+	}
 	for _, mode := range []string{"error", "garbage", "timeout"} {
 		t.Setenv("FAKE_CLAUDE", mode)
 		if _, err := c.Analyze(ctx, "abc-1", writeLogs(t, "x")); err == nil {

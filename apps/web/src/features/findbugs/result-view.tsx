@@ -57,6 +57,7 @@ export function ResultView({ result, engineer }: { result: Result; engineer: boo
           <CardContent className="grid gap-4 sm:grid-cols-2">
             <Field label="Error type" value={result.errorType} />
             <Field label="Komponen gagal" value={result.failedComponent} />
+            <Field label="Model AI" value={result.model} />
             <div className="sm:col-span-2">
               <Field label="Kemungkinan penyebab" value={result.likelyCause} />
             </div>
