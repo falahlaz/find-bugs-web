@@ -318,16 +318,28 @@ func toolProgress(dir string, repos []Repo, progress Progress) func(tool string,
 	if progress == nil {
 		return nil
 	}
+	// Name checkouts by project, adding the commit when a session reads
+	// several versions of the same project.
+	perProject := map[string]int{}
+	for _, r := range repos {
+		perProject[r.Project]++
+	}
+	name := func(r Repo) string {
+		if perProject[r.Project] > 1 && len(r.Commit) >= 8 {
+			return r.Project + "@" + r.Commit[:8]
+		}
+		return r.Project
+	}
 	rel := func(p string) string {
 		for _, r := range repos {
 			if r.Dir == "" {
 				continue
 			}
 			if rest, ok := strings.CutPrefix(p, r.Dir+"/"); ok {
-				return r.Project + "/" + rest
+				return name(r) + "/" + rest
 			}
 			if p == r.Dir {
-				return r.Project
+				return name(r)
 			}
 		}
 		if rest, ok := strings.CutPrefix(p, dir+"/"); ok {
