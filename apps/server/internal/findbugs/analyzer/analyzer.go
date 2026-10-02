@@ -77,6 +77,8 @@ If the logs contain TIBCO errors (identified by log entries where "service": "[T
 
 Both ESB and TIBCO may only return a status code without a response body — if a log entry shows status but err is null or missing, treat it as a valid error signal.
 
+Language: the readers are an Indonesian QA and engineering team. Write "summary", "likely_cause" and "suggested_action" in clear, technical Bahasa Indonesia (common technical terms such as timeout, endpoint, payload or rule validation may stay in English). Never translate the JSON keys, the "severity" and "error_source" values, the "relevant_logs" lines (they must stay verbatim), error codes, URLs, IDs, class or service names, or quoted ESB/TIBCO response bodies. Keep "error_type" and "failed_component" exactly as they appear in the logs.
+
 Respond with a single JSON object only, no markdown and no other text.`
 
 const userPromptTemplate = `Transaction ID: %s
@@ -88,18 +90,18 @@ Read the whole file before answering, in chunks with offset/limit if it is large
 Analyze the logs and respond in the following JSON format only, no other text:
 
 {
-  "summary": "one or two sentence description of what happened",
+  "summary": "one or two sentences in Bahasa Indonesia describing what happened",
   "error_type": "e.g. NullPointerException, TimeoutError, 404, etc.",
   "failed_component": "the service, class, function, or endpoint where it failed",
-  "likely_cause": "your best diagnosis of root cause based on the logs",
+  "likely_cause": "your best diagnosis of root cause based on the logs, in Bahasa Indonesia",
   "severity": "low | medium | high | critical",
-  "suggested_action": "specific next step the engineer should take",
+  "suggested_action": "specific next step the engineer should take, in Bahasa Indonesia",
   "relevant_logs": ["exact log line 1", "exact log line 2", ...],
   "error_source": "esb | tibco | internal | unknown"
 }
 
 In "relevant_logs", include ONLY the exact log lines (verbatim from logs.txt, without the line-number prefix the Read tool adds) that are most critical to understanding the error — error-level logs, exceptions, failed calls, validation failures. Max 10 lines. Do not paraphrase or rewrite them.
-If no relevant logs are found (e.g. only info-level logs with no errors), set relevant_logs to an empty array [] and set likely_cause to "Insufficient log detail".`
+If no relevant logs are found (e.g. only info-level logs with no errors), set relevant_logs to an empty array [] and set likely_cause to "Detail log tidak cukup".`
 
 // UserPrompt renders the per-job prompt for a log file of size bytes.
 func UserPrompt(transactionID string, size int64) string {
@@ -278,8 +280,8 @@ func (f Fake) Analyze(_ context.Context, transactionID, logPath string) (Diagnos
 		}
 	}
 	d := Diagnosis{
-		Summary: "Fake diagnosis for " + transactionID, ErrorType: "FakeError", FailedComponent: "fake-service",
-		LikelyCause: "Insufficient log detail", Severity: "medium", SuggestedAction: "Check the logs", ErrorSource: "internal",
+		Summary: "Diagnosis palsu untuk " + transactionID, ErrorType: "FakeError", FailedComponent: "fake-service",
+		LikelyCause: "Detail log tidak cukup", Severity: "medium", SuggestedAction: "Periksa log", ErrorSource: "internal",
 		RelevantLogs: rel, Model: "fake",
 	}
 	if d.RelevantLogs == nil {
