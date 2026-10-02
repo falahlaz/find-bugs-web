@@ -41,6 +41,8 @@ type Config struct {
 	Analyzer string // "claude" or "fake"
 	Claude   Claude
 
+	GitLab GitLab
+
 	TelegramToken  string
 	TelegramChatID string
 }
@@ -88,6 +90,31 @@ type Claude struct {
 	Model   string
 	Timeout time.Duration
 }
+
+// GitLab configures code tracing: cloning service repos from GitLab so the
+// analyzer can point an internal error at a file and line.
+type GitLab struct {
+	URL           string
+	Username      string
+	Token         string
+	CAFile        string
+	SkipTLSVerify bool
+	ReposDir      string
+	// Group is where a service's repo lives when RepoMap has no entry for its
+	// Kubernetes container name: <Group>/<container>.
+	Group   string
+	RepoMap map[string]string // container name -> group/project
+	Ref     string
+	Timeout time.Duration // per git command
+	// MaxRepos caps how many repos one job traces into.
+	MaxRepos int
+	// TraceEnabled is CODE_TRACE_ENABLED, the switch to turn tracing off
+	// without removing the GitLab settings.
+	TraceEnabled bool
+}
+
+// Enabled reports whether code tracing is switched on and configured.
+func (g GitLab) Enabled() bool { return g.TraceEnabled && g.URL != "" && g.Token != "" }
 
 type loader struct{ errs []string }
 
@@ -214,6 +241,30 @@ func Load(full bool) (Config, error) {
 		LoginTimeout:      l.dur("SPLUNK_LOGIN_TIMEOUT", 6*time.Minute),
 	}
 
+	c.GitLab = GitLab{
+		URL:           strings.TrimRight(l.str("GITLAB_URL", ""), "/"),
+		Username:      l.str("GITLAB_USERNAME", "oauth2"),
+		Token:         l.str("GITLAB_TOKEN", ""),
+		CAFile:        l.str("GITLAB_CA_FILE", ""),
+		SkipTLSVerify: l.bool("GITLAB_SKIP_SSL_VERIFY", false),
+		ReposDir:      l.str("GITLAB_REPOS_DIR", filepath.Join(home, "gitlab-services")),
+		Group:         l.str("GITLAB_GROUP", "my-telkomsel"),
+		Ref:           l.str("GITLAB_REF", "main"),
+		Timeout:       l.dur("GITLAB_GIT_TIMEOUT", 3*time.Minute),
+		MaxRepos:      l.int("CODE_TRACE_MAX_REPOS", 3),
+		TraceEnabled:  l.bool("CODE_TRACE_ENABLED", true),
+	}
+	if raw := l.str("GITLAB_REPO_MAP", ""); raw != "" {
+		if err := json.Unmarshal([]byte(raw), &c.GitLab.RepoMap); err != nil {
+			l.errs = append(l.errs, fmt.Sprintf("GITLAB_REPO_MAP: %v", err))
+		}
+	}
+	// With TLS checks off the CA file is not used, so a placeholder path that
+	// does not exist yet must not break tracing.
+	if c.GitLab.SkipTLSVerify {
+		c.GitLab.CAFile = ""
+	}
+
 	if full {
 		c.GP.Portal = l.required("GP_PORTAL")
 		c.Splunk.URL = strings.TrimRight(l.required("SPLUNK_URL"), "/")
@@ -233,6 +284,11 @@ func Load(full bool) (Config, error) {
 		}
 		if c.Analyzer != "claude" && c.Analyzer != "fake" {
 			l.errs = append(l.errs, "ANALYZER must be claude or fake")
+		}
+		if c.GitLab.Enabled() && c.GitLab.CAFile != "" {
+			if _, err := os.Stat(c.GitLab.CAFile); err != nil {
+				l.errs = append(l.errs, fmt.Sprintf("GITLAB_CA_FILE: %v", err))
+			}
 		}
 		if c.QueueMax < 1 || c.QueuePerUser < 1 {
 			l.errs = append(l.errs, "QUEUE_MAX and QUEUE_PER_USER must be >= 1")

@@ -185,24 +185,48 @@ func (c ClaudeCode) Args() []string {
 func (c ClaudeCode) Analyze(ctx context.Context, transactionID, logPath string) (Diagnosis, error) {
 	ctx, cancel := context.WithTimeout(ctx, c.Timeout)
 	defer cancel()
-	// Run in a fresh directory holding only the logs, so no project CLAUDE.md
-	// or other files are picked up.
-	dir, err := os.MkdirTemp("", "fbw-claude-")
+	dir, size, err := stageLogs(logPath)
 	if err != nil {
 		return Diagnosis{}, err
 	}
 	defer os.RemoveAll(dir)
-	logs, err := os.ReadFile(logPath)
+
+	result, models, err := c.run(ctx, dir, c.Args(), UserPrompt(transactionID, size))
 	if err != nil {
 		return Diagnosis{}, err
 	}
-	if err := os.WriteFile(filepath.Join(dir, LogFileName), logs, 0o600); err != nil {
+	d, err := Parse(result)
+	if err != nil {
 		return Diagnosis{}, err
 	}
+	d.Model = models
+	return d, nil
+}
 
-	cmd := exec.CommandContext(ctx, c.Bin, c.Args()...)
+// stageLogs copies the log file into a fresh directory holding only it, so
+// no project CLAUDE.md or other files are picked up. The caller removes dir.
+func stageLogs(logPath string) (dir string, size int64, err error) {
+	logs, err := os.ReadFile(logPath)
+	if err != nil {
+		return "", 0, err
+	}
+	dir, err = os.MkdirTemp("", "fbw-claude-")
+	if err != nil {
+		return "", 0, err
+	}
+	if err := os.WriteFile(filepath.Join(dir, LogFileName), logs, 0o600); err != nil {
+		os.RemoveAll(dir)
+		return "", 0, err
+	}
+	return dir, int64(len(logs)), nil
+}
+
+// run executes the CLI in dir with prompt on stdin and returns the result
+// text and the models that served it.
+func (c ClaudeCode) run(ctx context.Context, dir string, args []string, prompt string) (string, string, error) {
+	cmd := exec.CommandContext(ctx, c.Bin, args...)
 	cmd.Dir = dir
-	cmd.Stdin = strings.NewReader(UserPrompt(transactionID, int64(len(logs))))
+	cmd.Stdin = strings.NewReader(prompt)
 	// Own process group so a timeout kills claude and anything it spawned.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
@@ -211,9 +235,9 @@ func (c ClaudeCode) Analyze(ctx context.Context, transactionID, logPath string) 
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return Diagnosis{}, fmt.Errorf("claude timed out after %s", c.Timeout)
+			return "", "", fmt.Errorf("claude timed out after %s", c.Timeout)
 		}
-		return Diagnosis{}, fmt.Errorf("claude failed: %w: %s", err, tail(stderr.String()+stdout.String()))
+		return "", "", fmt.Errorf("claude failed: %w: %s", err, tail(stderr.String()+stdout.String()))
 	}
 	var out struct {
 		Type    string `json:"type"`
@@ -223,17 +247,12 @@ func (c ClaudeCode) Analyze(ctx context.Context, transactionID, logPath string) 
 		ModelUsage map[string]json.RawMessage `json:"modelUsage"`
 	}
 	if err := json.Unmarshal(stdout.Bytes(), &out); err != nil {
-		return Diagnosis{}, fmt.Errorf("claude output is not JSON: %s", tail(stdout.String()))
+		return "", "", fmt.Errorf("claude output is not JSON: %s", tail(stdout.String()))
 	}
 	if out.IsError {
-		return Diagnosis{}, fmt.Errorf("claude returned an error: %s", tail(out.Result))
+		return "", "", fmt.Errorf("claude returned an error: %s", tail(out.Result))
 	}
-	d, err := Parse(out.Result)
-	if err != nil {
-		return Diagnosis{}, err
-	}
-	d.Model = usedModels(out.ModelUsage, c.Model)
-	return d, nil
+	return out.Result, usedModels(out.ModelUsage, c.Model), nil
 }
 
 // usedModels lists the models in the CLI's modelUsage, falling back to the

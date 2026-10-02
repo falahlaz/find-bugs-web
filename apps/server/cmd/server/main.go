@@ -26,6 +26,7 @@ import (
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/api"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/analyzer"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/jobs"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/repos"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/splunk"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/watchdog"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/worker"
@@ -97,14 +98,27 @@ func serve() error {
 	}
 	mon := watchdog.New(gp, sp, notifier, cfg.PublicURL)
 
-	var an analyzer.Analyzer = analyzer.ClaudeCode{Bin: cfg.Claude.Bin, Model: cfg.Claude.Model, Timeout: cfg.Claude.Timeout}
+	cc := analyzer.ClaudeCode{Bin: cfg.Claude.Bin, Model: cfg.Claude.Model, Timeout: cfg.Claude.Timeout}
+	var an analyzer.Analyzer = cc
+	var tracer analyzer.Tracer = cc
 	if cfg.Analyzer == "fake" {
-		an = analyzer.Fake{}
+		an, tracer = analyzer.Fake{}, analyzer.Fake{}
 	}
 	wk := worker.New(st, sp, an, mon, notifier, worker.Config{
 		WaitingExpiry: cfg.WaitingExpiry, RecheckAfter: cfg.JobRecheckAfter, JobTimeout: cfg.JobTimeout, PublicURL: cfg.PublicURL,
 		LogDir: logDir(cfg), CorrelationMaxIDs: cfg.Splunk.CorrelationMaxIDs,
+		GitLabURL: cfg.GitLab.URL, TraceMaxRepos: cfg.GitLab.MaxRepos,
 	})
+	if g := cfg.GitLab; g.Enabled() {
+		wk.Repos = repos.New(repos.Config{
+			URL: g.URL, Username: g.Username, Token: g.Token, CAFile: g.CAFile, SkipTLSVerify: g.SkipTLSVerify,
+			Dir: g.ReposDir, Group: g.Group, RepoMap: g.RepoMap, Ref: g.Ref, Timeout: g.Timeout,
+		})
+		wk.Tracer = tracer
+		slog.Info("code tracing enabled", "gitlab", g.URL, "dir", g.ReposDir, "ref", g.Ref)
+	} else {
+		slog.Info("code tracing disabled (set GITLAB_URL and GITLAB_TOKEN to enable)")
+	}
 	if err := wk.Recover(ctx); err != nil {
 		return err
 	}

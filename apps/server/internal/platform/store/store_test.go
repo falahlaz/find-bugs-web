@@ -91,11 +91,14 @@ func TestJobLifecycle(t *testing.T) {
 		t.Fatalf("conditional update err = %v", err)
 	}
 	s.SetStatus(ctx, ids[0], nil, Transition{Status: StatusDone})
-	if err := s.SaveInvestigation(ctx, Investigation{JobID: ids[0], Summary: "boom", RelevantLogs: []string{"l1"}, RawLogSnippet: "raw", Model: "claude-haiku-4-5-20251001"}); err != nil {
+	if err := s.SaveInvestigation(ctx, Investigation{JobID: ids[0], Summary: "boom", RelevantLogs: []string{"l1"}, RawLogSnippet: "raw", Model: "claude-haiku-4-5-20251001",
+		CodeTrace: &CodeTrace{Status: TraceFound, Project: "g/svc", File: "a.js", Line: 7}}); err != nil {
 		t.Fatal(err)
 	}
 	if inv, err := s.GetInvestigation(ctx, ids[0]); err != nil || inv.Model != "claude-haiku-4-5-20251001" {
 		t.Fatalf("GetInvestigation model = %q, %v", inv.Model, err)
+	} else if ct := inv.CodeTrace; ct == nil || ct.Status != TraceFound || ct.File != "a.js" || ct.Line != 7 {
+		t.Fatalf("GetInvestigation code trace = %+v", ct)
 	}
 	if j, err := s.FindRecentResult(ctx, "t1", "prod", "24h", now.Add(-24*time.Hour)); err != nil || j.ID != ids[0] || j.FinishedAt == nil {
 		t.Fatalf("FindRecentResult = %+v, %v", j, err)

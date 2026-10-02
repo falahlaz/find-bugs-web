@@ -1,4 +1,4 @@
-import { Sparkles } from 'lucide-react'
+import { Code2, ExternalLink, Sparkles } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Alert } from '@/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -89,6 +89,46 @@ export function EngineerLogs({ result }: { result: Result }) {
   )
 }
 
+type CodeTrace = NonNullable<Result['codeTrace']>
+
+/** Where an internal error was traced to in the service code. */
+export function CodeTraceView({ trace }: { trace: CodeTrace }) {
+  if (trace.status === 'skipped' || trace.status === 'failed') {
+    return <Alert tone={trace.status === 'failed' ? 'warning' : 'neutral'}>{trace.reason}</Alert>
+  }
+  const location = trace.file ? `${trace.file}${trace.line ? `:${trace.line}` : ''}` : ''
+  return (
+    <div className="grid gap-4">
+      {trace.status === 'not_found' && <Alert tone="neutral">AI tidak menemukan lokasi kode yang cocok dengan yakin.</Alert>}
+      {location && (
+        <div className="grid gap-1">
+          <FieldLabel>Lokasi</FieldLabel>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[13px] break-all">
+            {trace.url ? (
+              <a href={trace.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-primary hover:underline">
+                {location}
+                <ExternalLink className="size-3.5 shrink-0" aria-hidden />
+              </a>
+            ) : (
+              <span>{location}</span>
+            )}
+            {trace.function && <span className="text-muted-foreground">· {trace.function}</span>}
+          </div>
+        </div>
+      )}
+      {trace.snippet && (
+        <pre className="max-h-96 overflow-auto rounded-lg border bg-muted px-3 py-2.5 font-mono text-[12.5px] leading-relaxed">{trace.snippet}</pre>
+      )}
+      <Field label="Penjelasan" value={trace.explanation} />
+      <p className="text-xs text-muted-foreground">
+        {trace.project}
+        {trace.commit && ` @ ${trace.commit.slice(0, 8)}`}. Kode diambil dari branch {trace.ref || 'main'}, jadi nomor baris bisa meleset
+        kalau versi yang ter-deploy berbeda.
+      </p>
+    </div>
+  )
+}
+
 /** Diagnosis plus the engineer report as stacked cards. */
 export function ResultView({ result, engineer, animate = false }: { result: Result; engineer: boolean; animate?: boolean }) {
   return (
@@ -106,6 +146,19 @@ export function ResultView({ result, engineer, animate = false }: { result: Resu
           <CardContent className="grid gap-5">
             <EngineerReport result={result} />
             <EngineerLogs result={result} />
+          </CardContent>
+        </Card>
+      )}
+      {engineer && result.codeTrace && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Code2 className="size-4 text-primary" aria-hidden />
+              Trace ke kode
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CodeTraceView trace={result.codeTrace} />
           </CardContent>
         </Card>
       )}

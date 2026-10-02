@@ -389,6 +389,21 @@ export interface components {
             stderr: string;
             stdout: string;
         };
+        CodeTrace: {
+            commit?: string;
+            explanation?: string;
+            file?: string;
+            function?: string;
+            /** Format: int64 */
+            line?: number;
+            model?: string;
+            project?: string;
+            reason?: string;
+            ref?: string;
+            snippet?: string;
+            status: string;
+            url?: string;
+        };
         CreateUserRequest: {
             password: string;
             /** @enum {string} */
@@ -507,6 +522,7 @@ export interface components {
             ok: boolean;
         };
         Result: {
+            codeTrace?: components["schemas"]["CodeTrace"] | null;
             /** @enum {string} */
             errorSource?: "esb" | "tibco" | "internal" | "unknown";
             errorType?: string;

@@ -141,6 +141,51 @@
         ],
         "type": "object"
       },
+      "CodeTrace": {
+        "properties": {
+          "commit": {
+            "type": "string"
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "file": {
+            "type": "string"
+          },
+          "function": {
+            "type": "string"
+          },
+          "line": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "model": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "ref": {
+            "type": "string"
+          },
+          "snippet": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "type": "object"
+      },
       "CreateUserRequest": {
         "properties": {
           "password": {
@@ -552,6 +597,14 @@
       },
       "Result": {
         "properties": {
+          "codeTrace": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/CodeTrace"
+              }
+            ],
+            "nullable": true
+          },
           "errorSource": {
             "enum": [
               "esb",

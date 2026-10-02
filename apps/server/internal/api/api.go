@@ -435,7 +435,7 @@ func shapeResult(u store.User, inv store.Investigation) *Result {
 	if u.Role == store.RoleEngineer {
 		res.ErrorType, res.FailedComponent, res.LikelyCause = inv.ErrorType, inv.FailedComponent, inv.LikelyCause
 		res.SuggestedAction, res.RelevantLogs, res.RawLogSnippet = inv.SuggestedAction, inv.RelevantLogs, inv.RawLogSnippet
-		res.Model = inv.Model
+		res.Model, res.CodeTrace = inv.Model, inv.CodeTrace
 	}
 	return res
 }
