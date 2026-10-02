@@ -90,7 +90,11 @@ func (f *Fake) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		f.EventPages++
 		res := []any{}
 		for i := len(lines) - 1 - offset; i >= 0 && (count <= 0 || len(res) < count); i-- {
-			res = append(res, map[string]any{"_raw": map[string]string{"value": lines[i]}, "_time": fmt.Sprintf("2026-10-01T08:%02d:%02d", i/60%60, i%60)})
+			res = append(res, map[string]any{
+				"_raw":  map[string]string{"value": lines[i]},
+				"_time": fmt.Sprintf("2026-10-01T08:%02d:%02d", i/60%60, i%60),
+				"host":  "fake-host", "source": "fake-service", "sourcetype": "_json",
+			})
 		}
 		writeJSON(w, map[string]any{"results": res})
 	case strings.HasPrefix(p, "/services/search/v2/jobs/"):

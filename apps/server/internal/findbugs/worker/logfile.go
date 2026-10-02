@@ -54,6 +54,10 @@ func formatLogFile(job store.Job, res splunk.Result, linked []string) string {
 	b.WriteString("\n")
 	for i, ev := range res.Events {
 		fmt.Fprintf(&b, "#%d [%s]\n", i+1, ev.Time)
+		if meta := eventMeta(ev); meta != "" {
+			b.WriteString(meta)
+			b.WriteString("\n")
+		}
 		raw := strings.TrimSpace(ev.Raw)
 		var out bytes.Buffer
 		if strings.HasPrefix(raw, "{") && json.Indent(&out, []byte(raw), "", "  ") == nil {
@@ -96,4 +100,17 @@ func PurgeLogFiles(dir string, cutoff time.Time) (int, error) {
 		n++
 	}
 	return n, nil
+}
+
+// eventMeta renders the event's Splunk metadata as one "host=… source=…
+// sourcetype=…" line, leaving out empty fields. It names the service that
+// logged the event, which the raw event usually does not.
+func eventMeta(ev splunk.Event) string {
+	var parts []string
+	for _, f := range []struct{ k, v string }{{"host", ev.Host}, {"source", ev.Source}, {"sourcetype", ev.SourceType}} {
+		if v := strings.TrimSpace(f.v); v != "" {
+			parts = append(parts, f.k+"="+v)
+		}
+	}
+	return redact.Logs(strings.Join(parts, " "), 0)
 }

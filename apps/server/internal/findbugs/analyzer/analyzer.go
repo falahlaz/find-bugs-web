@@ -83,7 +83,7 @@ Respond with a single JSON object only, no markdown and no other text.`
 
 const userPromptTemplate = `Transaction ID: %s
 
-The logs are in ./logs.txt (%s). The file starts with a header (event count, any linked backend IDs whose events are merged in, and whether the search hit the event limit), then one block per event, oldest first: "#<n> [<time>]" followed by the raw event (JSON events are pretty-printed).
+The logs are in ./logs.txt (%s). The file starts with a header (event count, any linked backend IDs whose events are merged in, and whether the search hit the event limit), then one block per event, oldest first: "#<n> [<time>]", a "host=… source=… sourcetype=…" line naming the service that logged it (when Splunk has it), then the raw event (JSON events are pretty-printed).
 
 Read the whole file before answering, in chunks with offset/limit if it is large. If it is too large to read completely, first Grep it for errors (e.g. "error|exception|fail|timeout|ESB|TIBCO|status.{0,4}[45][0-9][0-9]"), then Read the events around every match and the first and last events of the transaction. Base the diagnosis on the whole flow, not just the last error.
 
