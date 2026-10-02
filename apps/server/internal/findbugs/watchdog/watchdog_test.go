@@ -104,3 +104,17 @@ func TestSplunkAutoReauthOnce(t *testing.T) {
 		t.Error("reauth without VPN should fail")
 	}
 }
+
+func TestVPNStatusRecordsState(t *testing.T) {
+	v := &fakeVPN{}
+	m := New(v, &fakeSplunk{}, &rec{}, "")
+	ctx := context.Background()
+	m.CheckVPN(ctx)
+	v.Set(true)
+	if s := m.VPNStatus(ctx); !s.Healthy || s.GPStatus != "x" {
+		t.Fatalf("status = %+v", s)
+	}
+	if !m.State().VPNHealthy {
+		t.Error("live status not recorded; banner would stay stale")
+	}
+}
