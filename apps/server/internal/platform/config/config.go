@@ -108,6 +108,10 @@ type GitLab struct {
 	Timeout time.Duration // per git command
 	// MaxRepos caps how many repos one job traces into.
 	MaxRepos int
+	// Model and TraceTimeout are for the code-tracing pass, which needs a
+	// stronger model than the log diagnosis.
+	Model        string
+	TraceTimeout time.Duration
 	// TraceEnabled is CODE_TRACE_ENABLED, the switch to turn tracing off
 	// without removing the GitLab settings.
 	TraceEnabled bool
@@ -252,6 +256,8 @@ func Load(full bool) (Config, error) {
 		Ref:           l.str("GITLAB_REF", "main"),
 		Timeout:       l.dur("GITLAB_GIT_TIMEOUT", 3*time.Minute),
 		MaxRepos:      l.int("CODE_TRACE_MAX_REPOS", 3),
+		Model:         l.str("CODE_TRACE_MODEL", "claude-opus-5-5"),
+		TraceTimeout:  l.dur("CODE_TRACE_TIMEOUT", 8*time.Minute),
 		TraceEnabled:  l.bool("CODE_TRACE_ENABLED", true),
 	}
 	if raw := l.str("GITLAB_REPO_MAP", ""); raw != "" {
