@@ -514,6 +514,7 @@ export interface components {
             likelyCause?: string;
             linkedIds?: string[];
             llmFailed: boolean;
+            model?: string;
             qaMessage?: string;
             rawLogSnippet?: string;
             relevantLogs?: string[];

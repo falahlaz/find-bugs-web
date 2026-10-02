@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -28,6 +29,9 @@ type Diagnosis struct {
 	SuggestedAction string   `json:"suggested_action"`
 	RelevantLogs    []string `json:"relevant_logs"`
 	ErrorSource     string   `json:"error_source"`
+	// Model is the model(s) that produced the diagnosis, as reported by the
+	// analyzer rather than as configured. Not part of the LLM output.
+	Model string `json:"-"`
 }
 
 // Analyzer produces a Diagnosis for a transaction's logs. logPath is a file
@@ -215,6 +219,8 @@ func (c ClaudeCode) Analyze(ctx context.Context, transactionID, logPath string) 
 		Type    string `json:"type"`
 		IsError bool   `json:"is_error"`
 		Result  string `json:"result"`
+		// ModelUsage is keyed by the model IDs that served the request.
+		ModelUsage map[string]json.RawMessage `json:"modelUsage"`
 	}
 	if err := json.Unmarshal(stdout.Bytes(), &out); err != nil {
 		return Diagnosis{}, fmt.Errorf("claude output is not JSON: %s", tail(stdout.String()))
@@ -222,7 +228,26 @@ func (c ClaudeCode) Analyze(ctx context.Context, transactionID, logPath string) 
 	if out.IsError {
 		return Diagnosis{}, fmt.Errorf("claude returned an error: %s", tail(out.Result))
 	}
-	return Parse(out.Result)
+	d, err := Parse(out.Result)
+	if err != nil {
+		return Diagnosis{}, err
+	}
+	d.Model = usedModels(out.ModelUsage, c.Model)
+	return d, nil
+}
+
+// usedModels lists the models in the CLI's modelUsage, falling back to the
+// configured model when the CLI does not report any.
+func usedModels(usage map[string]json.RawMessage, configured string) string {
+	if len(usage) == 0 {
+		return configured
+	}
+	names := make([]string, 0, len(usage))
+	for m := range usage {
+		names = append(names, m)
+	}
+	slices.Sort(names)
+	return strings.Join(names, ", ")
 }
 
 func tail(s string) string {
@@ -257,7 +282,7 @@ func (f Fake) Analyze(_ context.Context, transactionID, logPath string) (Diagnos
 	d := Diagnosis{
 		Summary: "Diagnosis palsu untuk " + transactionID, ErrorType: "FakeError", FailedComponent: "fake-service",
 		LikelyCause: "Detail log tidak cukup", Severity: "medium", SuggestedAction: "Periksa log", ErrorSource: "internal",
-		RelevantLogs: rel,
+		RelevantLogs: rel, Model: "fake",
 	}
 	if d.RelevantLogs == nil {
 		d.RelevantLogs = []string{}
