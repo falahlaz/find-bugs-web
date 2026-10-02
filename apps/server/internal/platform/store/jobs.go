@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 )
@@ -381,19 +382,45 @@ type Investigation struct {
 type CodeTrace struct {
 	// Status is found or not_found (the tracer ran), or skipped or failed
 	// (it could not run; Reason says why).
-	Status      string `json:"status"`
-	Reason      string `json:"reason,omitempty"`
-	Project     string `json:"project,omitempty"`
-	Ref         string `json:"ref,omitempty"`
-	Commit      string `json:"commit,omitempty"`
-	File        string `json:"file,omitempty"`
-	Line        int    `json:"line,omitempty"`
-	Function    string `json:"function,omitempty"`
-	Snippet     string `json:"snippet,omitempty"`
-	Explanation string `json:"explanation,omitempty"`
-	URL         string `json:"url,omitempty"` // GitLab link to the line
-	Model       string `json:"model,omitempty"`
+	Status  string `json:"status"`
+	Reason  string `json:"reason,omitempty"`
+	Project string `json:"project,omitempty"`
+	Ref     string `json:"ref,omitempty"`
+	Commit  string `json:"commit,omitempty"`
+	// RefSource says how Ref was chosen: RefDeployed (the commit deployed in
+	// Env when the error happened), RefFallback (the default branch, RefNote
+	// says why) or RefManual (picked by an engineer).
+	RefSource    string `json:"refSource,omitempty"`
+	RefNote      string `json:"refNote,omitempty"`
+	Env          string `json:"env,omitempty"`
+	DeployedAt   string `json:"deployedAt,omitempty"` // RFC 3339
+	DeployJobURL string `json:"deployJobUrl,omitempty"`
+	File         string `json:"file,omitempty"`
+	Line         int    `json:"line,omitempty"`
+	Function     string `json:"function,omitempty"`
+	Snippet      string `json:"snippet,omitempty"`
+	Explanation  string `json:"explanation,omitempty"`
+	URL          string `json:"url,omitempty"` // GitLab link to the line
+	Model        string `json:"model,omitempty"`
 }
+
+// SetURL links a found trace to its line in GitLab at base.
+func (c *CodeTrace) SetURL(base string) {
+	if c.Status != TraceFound || base == "" || c.Project == "" || c.Commit == "" || c.File == "" {
+		return
+	}
+	c.URL = fmt.Sprintf("%s/%s/-/blob/%s/%s", base, c.Project, c.Commit, c.File)
+	if c.Line > 0 {
+		c.URL += fmt.Sprintf("#L%d", c.Line)
+	}
+}
+
+// CodeTrace ref sources.
+const (
+	RefDeployed = "deployed"
+	RefFallback = "fallback"
+	RefManual   = "manual"
+)
 
 // CodeTrace statuses.
 const (
@@ -470,11 +497,17 @@ func (s *Store) PurgeRawLogs(ctx context.Context, cutoff time.Time) (int64, erro
 	return res.RowsAffected()
 }
 
-// PurgeDiagnoses deletes investigations created before cutoff; job metadata stays.
+// PurgeDiagnoses deletes investigations created before cutoff, with their
+// code trace chats; job metadata stays.
 func (s *Store) PurgeDiagnoses(ctx context.Context, cutoff time.Time) (int64, error) {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM investigations WHERE created_at < ?`, ts(cutoff))
 	if err != nil {
 		return 0, err
+	}
+	for _, table := range []string{"trace_messages", "trace_sessions"} {
+		if _, err := s.db.ExecContext(ctx, `DELETE FROM `+table+` WHERE job_id NOT IN (SELECT job_id FROM investigations)`); err != nil {
+			return 0, err
+		}
 	}
 	return res.RowsAffected()
 }

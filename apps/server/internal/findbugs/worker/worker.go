@@ -7,10 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/analyzer"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/gitlab"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/redact"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/repos"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/splunk"
@@ -53,11 +56,24 @@ type Config struct {
 	GitLabURL string
 	// TraceMaxRepos caps how many service repos one trace reads.
 	TraceMaxRepos int
+	// EnvMap maps a Kubernetes namespace to the GitLab environment whose
+	// deployed commit is traced.
+	EnvMap map[string]string
+	// SessionDir holds one working directory per traced job, kept so the
+	// trace session can be continued.
+	SessionDir string
 }
 
 // RepoSyncer is the subset of repos.Manager used by the worker.
 type RepoSyncer interface {
-	Sync(ctx context.Context, container string) (repos.Checkout, error)
+	Project(container string) string
+	DefaultRef() string
+	Sync(ctx context.Context, container, ref string) (repos.Checkout, error)
+}
+
+// Deployments is the subset of gitlab.Client used by the worker.
+type Deployments interface {
+	DeployedCommit(ctx context.Context, project, env string, before time.Time) (gitlab.Deployment, error)
 }
 
 // Worker processes jobs.
@@ -71,6 +87,9 @@ type Worker struct {
 	// Repos and Tracer, when both set, trace internal errors to the code.
 	Repos  RepoSyncer
 	Tracer analyzer.Tracer
+	// Deploys, when set, picks the commit deployed where the error happened
+	// instead of the default branch.
+	Deploys Deployments
 
 	wake chan struct{}
 }
@@ -85,6 +104,9 @@ func New(st *store.Store, s Searcher, a analyzer.Analyzer, m Monitor, n notify.N
 	}
 	if cfg.LogDir == "" {
 		cfg.LogDir = "data/logs"
+	}
+	if cfg.SessionDir == "" {
+		cfg.SessionDir = "data/trace-sessions"
 	}
 	return &Worker{Store: st, Splunk: s, Analyzer: a, Monitor: m, Notify: n, Cfg: cfg, wake: make(chan struct{}, 1)}
 }
@@ -287,31 +309,35 @@ func (w *Worker) run(parent context.Context, job store.Job) {
 // services that logged the transaction. It never fails the job: the
 // diagnosis stands on its own and the trace says why it is missing.
 func (w *Worker) traceCode(ctx context.Context, log *slog.Logger, job store.Job, logPath string, d analyzer.Diagnosis, events []splunk.Event) *store.CodeTrace {
-	containers := repos.Containers(events)
-	if len(containers) == 0 {
+	targets := repos.Targets(events)
+	if len(targets) == 0 {
 		return &store.CodeTrace{Status: store.TraceSkipped, Reason: "Log Splunk tidak menyebut container service-nya, jadi repo GitLab tidak bisa ditentukan."}
 	}
-	if n := w.Cfg.TraceMaxRepos; n > 0 && len(containers) > n {
-		containers = containers[:n]
+	if n := w.Cfg.TraceMaxRepos; n > 0 && len(targets) > n {
+		targets = targets[:n]
 	}
 	var rs []analyzer.Repo
-	checkouts := map[string]repos.Checkout{}
+	checkouts := map[string]Checkout{}
 	var errs []string
-	for _, c := range containers {
-		co, err := w.Repos.Sync(ctx, c)
+	for _, tg := range targets {
+		co, err := w.checkout(ctx, log, tg)
 		if err != nil {
-			log.Warn("repo sync failed", "container", c, "project", co.Project, "err", err)
+			log.Warn("repo sync failed", "container", tg.Container, "project", co.Project, "err", err)
 			errs = append(errs, fmt.Sprintf("%s: %v", co.Project, err))
 			continue
 		}
 		checkouts[co.Project] = co
-		rs = append(rs, analyzer.Repo{Project: co.Project, Dir: co.Dir, Commit: co.Commit})
+		rs = append(rs, co.Repo())
 	}
 	if len(rs) == 0 {
 		return &store.CodeTrace{Status: store.TraceFailed, Reason: "Gagal mengambil repo dari GitLab (cek VPN dan token): " + redact.Sensitive(strings.Join(errs, "; "))}
 	}
 	log.Info("tracing code", "repos", len(rs))
-	t, err := w.Tracer.Trace(ctx, job.TransactionID, logPath, d, rs)
+	sess := analyzer.Session{ID: analyzer.NewSessionID(), Dir: filepath.Join(w.Cfg.SessionDir, fmt.Sprintf("job-%d", job.ID))}
+	if err := analyzer.PrepareSession(sess.Dir, logPath); err != nil {
+		return &store.CodeTrace{Status: store.TraceFailed, Reason: "Gagal menyiapkan sesi trace: " + redact.Sensitive(err.Error())}
+	}
+	t, err := w.Tracer.Trace(ctx, sess, job.TransactionID, d, rs, nil)
 	if err != nil {
 		log.Warn("code trace failed", "err", err)
 		reason := "Trace kode gagal: " + redact.Sensitive(err.Error())
@@ -325,16 +351,98 @@ func (w *Worker) traceCode(ctx context.Context, log *slog.Logger, job store.Job,
 		Snippet: redact.Sensitive(t.Snippet), Explanation: redact.Sensitive(t.Explanation), Model: t.Model,
 	}
 	if co, ok := checkouts[t.Project]; ok {
-		ct.Ref, ct.Commit = co.Ref, co.Commit
-		if t.Status == store.TraceFound && w.Cfg.GitLabURL != "" {
-			ct.URL = fmt.Sprintf("%s/%s/-/blob/%s/%s", w.Cfg.GitLabURL, co.Project, co.Commit, t.File)
-			if t.Line > 0 {
-				ct.URL += fmt.Sprintf("#L%d", t.Line)
+		co.Fill(ct, w.Cfg.GitLabURL)
+	}
+	// Keep the session so engineers can ask about the trace.
+	ts := store.TraceSession{JobID: job.ID, SessionID: sess.ID, Dir: sess.Dir}
+	for _, co := range checkouts {
+		ts.Repos = append(ts.Repos, co.TraceRepo())
+	}
+	sort.Slice(ts.Repos, func(i, j int) bool { return ts.Repos[i].Project < ts.Repos[j].Project })
+	if err := w.Store.SaveTraceSession(context.WithoutCancel(ctx), ts); err != nil {
+		log.Warn("save trace session", "err", err)
+	}
+	log.Info("code traced", "status", ct.Status, "project", ct.Project, "file", ct.File, "line", ct.Line, "ref", ct.Ref, "ref_source", ct.RefSource)
+	return ct
+}
+
+// Checkout is a synced repo plus how its version was chosen.
+type Checkout struct {
+	repos.Checkout
+	RefSource string // store.RefDeployed, RefFallback or RefManual
+	RefNote   string // why the default branch was used
+	Env       string
+	Deploy    *gitlab.Deployment
+}
+
+// Repo is the checkout as the tracer sees it.
+func (co Checkout) Repo() analyzer.Repo {
+	r := analyzer.Repo{Project: co.Project, Dir: co.Dir, Commit: co.Commit, Ref: co.Ref}
+	if co.RefSource == store.RefDeployed {
+		r.Env = co.Env
+	}
+	return r
+}
+
+// TraceRepo is the checkout as the trace session records it.
+func (co Checkout) TraceRepo() store.TraceRepo {
+	return store.TraceRepo{
+		Container: co.Container, Project: co.Project, Dir: co.Dir, Commit: co.Commit, Ref: co.Ref,
+		RefSource: co.RefSource, Env: co.Repo().Env,
+	}
+}
+
+// Fill copies the version details into a trace and links it to GitLab.
+func (co Checkout) Fill(ct *store.CodeTrace, gitlabURL string) {
+	ct.Ref, ct.Commit, ct.RefSource, ct.RefNote, ct.Env = co.Ref, co.Commit, co.RefSource, co.RefNote, co.Env
+	if co.Deploy != nil {
+		if !co.Deploy.FinishedAt.IsZero() {
+			ct.DeployedAt = co.Deploy.FinishedAt.UTC().Format(time.RFC3339)
+		}
+		ct.DeployJobURL = co.Deploy.JobURL
+	}
+	ct.SetURL(gitlabURL)
+}
+
+// checkout syncs the commit deployed in the target's environment when the
+// error happened, falling back to the default branch when that is unknown.
+func (w *Worker) checkout(ctx context.Context, log *slog.Logger, tg repos.Target) (Checkout, error) {
+	project := w.Repos.Project(tg.Container)
+	env := w.Cfg.EnvMap[tg.Namespace]
+	var note string
+	switch {
+	case tg.Namespace == "":
+		note = "Namespace pod tidak ada di log Splunk."
+	case env == "":
+		note = fmt.Sprintf("Namespace %s belum dipetakan ke environment GitLab (GITLAB_ENV_MAP).", tg.Namespace)
+	case w.Deploys == nil:
+		note = "Pencarian deployment GitLab tidak aktif."
+	default:
+		dep, err := w.Deploys.DeployedCommit(ctx, project, env, tg.LastSeen)
+		if err == nil {
+			co, err := w.Repos.Sync(ctx, tg.Container, dep.SHA)
+			if err == nil {
+				co.Ref = dep.Ref
+				return Checkout{Checkout: co, RefSource: store.RefDeployed, Env: env, Deploy: &dep}, nil
 			}
+			log.Warn("deployed commit sync failed", "project", project, "env", env, "sha", dep.SHA, "err", err)
+			note = fmt.Sprintf("Gagal mengambil commit %s yang ter-deploy di %s: %s", short(dep.SHA), env, redact.Sensitive(err.Error()))
+		} else if errors.Is(err, gitlab.ErrNotFound) {
+			note = fmt.Sprintf("Tidak ada job %s%s sukses sebelum waktu error.", gitlab.DeployJobPrefix, env)
+		} else {
+			log.Warn("deployment lookup failed", "project", project, "env", env, "err", err)
+			note = "Gagal membaca deployment dari GitLab: " + redact.Sensitive(err.Error())
 		}
 	}
-	log.Info("code traced", "status", ct.Status, "project", ct.Project, "file", ct.File, "line", ct.Line)
-	return ct
+	co, err := w.Repos.Sync(ctx, tg.Container, "")
+	return Checkout{Checkout: co, RefSource: store.RefFallback, RefNote: note, Env: env}, err
+}
+
+func short(sha string) string {
+	if len(sha) > 8 {
+		return sha[:8]
+	}
+	return sha
 }
 
 // searchFailure turns a Splunk error into a user-facing reason, noting a

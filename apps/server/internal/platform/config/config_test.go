@@ -37,7 +37,8 @@ func TestLoadGitLab(t *testing.T) {
 	t.Setenv("SPLUNK_SPL_TEMPLATES", `{"prod":"index=a {transaction_id}"}`)
 	c, err := Load(true)
 	if err != nil || c.GitLab.Enabled() || c.GitLab.Username != "oauth2" || c.GitLab.Ref != "main" || c.GitLab.Group != "my-telkomsel" ||
-		c.GitLab.Model != "claude-opus-5-5" || c.GitLab.TraceTimeout != 8*time.Minute {
+		c.GitLab.Model != "claude-opus-5-5" || c.GitLab.TraceTimeout != 8*time.Minute || c.GitLab.EnvMap["tdw-webapi"] != "production" ||
+		c.GitLab.WorktreeTTL != 14*24*time.Hour || c.GitLab.SessionIdle != 10*time.Minute || c.GitLab.ChatConcurrency != 2 {
 		t.Fatalf("defaults = %+v, %v", c.GitLab, err)
 	}
 
@@ -53,6 +54,18 @@ func TestLoadGitLab(t *testing.T) {
 	if err != nil || !c.GitLab.Enabled() || c.GitLab.URL != "https://gitlab.example.com" || c.GitLab.CAFile != "" || c.GitLab.RepoMap["web"] != "other/web" {
 		t.Fatalf("gitlab = %+v, %v", c.GitLab, err)
 	}
+	t.Setenv("GITLAB_ENV_MAP", `{"ns-a":"dev"}`)
+	if c, err := Load(true); err != nil || len(c.GitLab.EnvMap) != 1 || c.GitLab.EnvMap["ns-a"] != "dev" {
+		t.Errorf("env map = %v, %v", c.GitLab.EnvMap, err)
+	}
+	if got := strings.Join(Environments(map[string]string{"a": "production", "b": "dev", "c": "zzz", "d": "dev", "e": "blue"}), ","); got != "dev,blue,production,zzz" {
+		t.Errorf("Environments = %s", got)
+	}
+	t.Setenv("GITLAB_ENV_MAP", `[1]`)
+	if _, err := Load(true); err == nil || !strings.Contains(err.Error(), "GITLAB_ENV_MAP") {
+		t.Errorf("bad env map err = %v", err)
+	}
+	t.Setenv("GITLAB_ENV_MAP", "")
 	t.Setenv("CODE_TRACE_ENABLED", "false")
 	if c, _ := Load(true); c.GitLab.Enabled() {
 		t.Error("CODE_TRACE_ENABLED=false should disable tracing")

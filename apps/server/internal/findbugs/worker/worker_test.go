@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/analyzer"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/gitlab"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/jobs"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/repos"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/splunk"
@@ -416,19 +417,47 @@ func TestFormatLogFileEventMeta(t *testing.T) {
 
 type fakeRepos struct{ fail map[string]bool }
 
-func (f fakeRepos) Sync(_ context.Context, c string) (repos.Checkout, error) {
-	co := repos.Checkout{Container: c, Project: "grp/" + c, Dir: "/r/grp/" + c, Ref: "main", Commit: "c0ffee"}
-	if f.fail[c] {
+func (fakeRepos) Project(c string) string { return "grp/" + c }
+func (fakeRepos) DefaultRef() string      { return "main" }
+
+func (f fakeRepos) Sync(_ context.Context, c, ref string) (repos.Checkout, error) {
+	if ref == "" {
+		ref = "main"
+	}
+	commit := "c0ffee"
+	if len(ref) == 40 {
+		commit = ref
+	}
+	co := repos.Checkout{Container: c, Project: "grp/" + c, Dir: "/r/grp/" + c + "@" + commit[:6], Ref: ref, Commit: commit}
+	if f.fail[c] || f.fail[ref] {
 		return co, errors.New("clone failed")
 	}
 	return co, nil
+}
+
+type fakeDeploys struct {
+	err    error
+	before []time.Time
+}
+
+func (f *fakeDeploys) DeployedCommit(_ context.Context, project, env string, before time.Time) (gitlab.Deployment, error) {
+	f.before = append(f.before, before)
+	if f.err != nil {
+		return gitlab.Deployment{}, f.err
+	}
+	return gitlab.Deployment{Environment: env, Ref: "release/9.5.0", SHA: strings.Repeat("d", 40), JobURL: "https://g/jobs/9",
+		FinishedAt: time.Date(2026, 10, 1, 3, 0, 0, 0, time.UTC)}, nil
 }
 
 func TestCodeTrace(t *testing.T) {
 	e := setup(t, analyzer.Fake{})
 	e.w.Repos, e.w.Tracer = fakeRepos{}, analyzer.Fake{}
 	e.w.Cfg.GitLabURL = "https://gitlab.example.com"
+	e.w.Cfg.EnvMap = map[string]string{"tdw-dev": "dev"}
+	e.w.Cfg.SessionDir = t.TempDir()
 	ctx := context.Background()
+	logPath := filepath.Join(t.TempDir(), "job.log")
+	os.WriteFile(logPath, []byte("#1 [t] ERROR boom\n"), 0o600)
 
 	// The fake Splunk's events carry no pod log path: nothing to trace into.
 	e.fake.SetLogs("abc-1", "ERROR boom")
@@ -439,21 +468,65 @@ func TestCodeTrace(t *testing.T) {
 		t.Fatalf("trace = %+v, %v", inv.CodeTrace, err)
 	}
 
-	pod := func(c string) splunk.Event { return splunk.Event{Source: "/var/log/pods/ns_p_u/" + c + "/0.log"} }
+	pod := func(ns, c string) splunk.Event {
+		return splunk.Event{Source: "/var/log/pods/" + ns + "_p_u/" + c + "/0.log", Time: "2026-10-02T17:41:29.502+07:00"}
+	}
 	log := slog.Default()
-	ct := e.w.traceCode(ctx, log, j, "logs", analyzer.Diagnosis{}, []splunk.Event{pod("svc"), pod("svc"), pod("gw")})
-	if ct.Status != store.TraceFound || ct.Project != "grp/svc" || ct.Commit != "c0ffee" || ct.Ref != "main" ||
-		ct.URL != "https://gitlab.example.com/grp/svc/-/blob/c0ffee/README.md#L1" {
+
+	// No deployment lookup configured: the default branch, with a note.
+	ct := e.w.traceCode(ctx, log, j, logPath, analyzer.Diagnosis{}, []splunk.Event{pod("tdw-dev", "svc"), pod("tdw-dev", "svc"), pod("tdw-dev", "gw")})
+	if ct.Status != store.TraceFound || ct.Project != "grp/svc" || ct.Commit != "c0ffee" || ct.Ref != "main" || ct.RefSource != store.RefFallback ||
+		ct.RefNote == "" || ct.URL != "https://gitlab.example.com/grp/svc/-/blob/c0ffee/README.md#L1" {
 		t.Fatalf("found trace = %+v", ct)
 	}
 
+	// The commit deployed in the namespace's environment before the error.
+	deps := &fakeDeploys{}
+	e.w.Deploys = deps
+	sha := strings.Repeat("d", 40)
+	ct = e.w.traceCode(ctx, log, j, logPath, analyzer.Diagnosis{}, []splunk.Event{pod("tdw-dev", "svc")})
+	if ct.RefSource != store.RefDeployed || ct.Env != "dev" || ct.Commit != sha || ct.Ref != "release/9.5.0" ||
+		ct.DeployedAt != "2026-10-01T03:00:00Z" || ct.DeployJobURL != "https://g/jobs/9" || ct.URL != "https://gitlab.example.com/grp/svc/-/blob/"+sha+"/README.md#L1" {
+		t.Fatalf("deployed trace = %+v", ct)
+	}
+	if len(deps.before) != 1 || !deps.before[0].Equal(time.Date(2026, 10, 2, 10, 41, 29, 502e6, time.UTC)) {
+		t.Fatalf("deployment looked up before %v", deps.before)
+	}
+	// The session is kept for follow-up questions, with the logs in it.
+	ts, err := e.st.GetTraceSession(ctx, j.ID)
+	if err != nil || ts.SessionID == "" || ts.State != store.TraceOpen || len(ts.Repos) != 1 || ts.Repos[0].Commit != sha ||
+		ts.Repos[0].RefSource != store.RefDeployed || ts.Repos[0].Env != "dev" || ts.Repos[0].Container != "svc" {
+		t.Fatalf("trace session = %+v, %v", ts, err)
+	}
+	if b, err := os.ReadFile(filepath.Join(ts.Dir, analyzer.LogFileName)); err != nil || !strings.Contains(string(b), "ERROR boom") {
+		t.Fatalf("session logs = %q, %v", b, err)
+	}
+
+	// Unknown namespace, missing deployment, or an unfetchable commit fall
+	// back to the default branch.
+	ct = e.w.traceCode(ctx, log, j, logPath, analyzer.Diagnosis{}, []splunk.Event{pod("other", "svc")})
+	if ct.RefSource != store.RefFallback || !strings.Contains(ct.RefNote, "other") || ct.Env != "" {
+		t.Fatalf("unknown namespace trace = %+v", ct)
+	}
+	e.w.Deploys = &fakeDeploys{err: fmt.Errorf("x: %w", gitlab.ErrNotFound)}
+	ct = e.w.traceCode(ctx, log, j, logPath, analyzer.Diagnosis{}, []splunk.Event{pod("tdw-dev", "svc")})
+	if ct.RefSource != store.RefFallback || !strings.Contains(ct.RefNote, "deploy-eks:dev") || ct.Commit != "c0ffee" {
+		t.Fatalf("no deployment trace = %+v", ct)
+	}
+	e.w.Deploys = deps
+	e.w.Repos = fakeRepos{fail: map[string]bool{sha: true}}
+	ct = e.w.traceCode(ctx, log, j, logPath, analyzer.Diagnosis{}, []splunk.Event{pod("tdw-dev", "svc")})
+	if ct.RefSource != store.RefFallback || !strings.Contains(ct.RefNote, "dddddddd") || ct.Status != store.TraceFound {
+		t.Fatalf("deployed sync failure trace = %+v", ct)
+	}
+
 	e.w.Repos = fakeRepos{fail: map[string]bool{"svc": true}}
-	if ct := e.w.traceCode(ctx, log, j, "logs", analyzer.Diagnosis{}, []splunk.Event{pod("svc")}); ct.Status != store.TraceFailed || !strings.Contains(ct.Reason, "grp/svc: clone failed") {
+	if ct := e.w.traceCode(ctx, log, j, logPath, analyzer.Diagnosis{}, []splunk.Event{pod("tdw-dev", "svc")}); ct.Status != store.TraceFailed || !strings.Contains(ct.Reason, "grp/svc: clone failed") {
 		t.Fatalf("sync failure trace = %+v", ct)
 	}
 
 	e.w.Repos, e.w.Tracer = fakeRepos{}, analyzer.Fake{Err: errors.New("cli down")}
-	if ct := e.w.traceCode(ctx, log, j, "logs", analyzer.Diagnosis{}, []splunk.Event{pod("svc")}); ct.Status != store.TraceFailed || !strings.Contains(ct.Reason, "cli down") {
+	if ct := e.w.traceCode(ctx, log, j, logPath, analyzer.Diagnosis{}, []splunk.Event{pod("tdw-dev", "svc")}); ct.Status != store.TraceFailed || !strings.Contains(ct.Reason, "cli down") {
 		t.Fatalf("tracer failure trace = %+v", ct)
 	}
 }

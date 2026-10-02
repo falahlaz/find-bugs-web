@@ -25,9 +25,11 @@ import (
 
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/api"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/analyzer"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/gitlab"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/jobs"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/repos"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/splunk"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/tracechat"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/watchdog"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/worker"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/auth"
@@ -106,15 +108,30 @@ func serve() error {
 	wk := worker.New(st, sp, an, mon, notifier, worker.Config{
 		WaitingExpiry: cfg.WaitingExpiry, RecheckAfter: cfg.JobRecheckAfter, JobTimeout: cfg.JobTimeout, PublicURL: cfg.PublicURL,
 		LogDir: logDir(cfg), CorrelationMaxIDs: cfg.Splunk.CorrelationMaxIDs,
-		GitLabURL: cfg.GitLab.URL, TraceMaxRepos: cfg.GitLab.MaxRepos,
+		GitLabURL: cfg.GitLab.URL, TraceMaxRepos: cfg.GitLab.MaxRepos, EnvMap: cfg.GitLab.EnvMap,
+		SessionDir: dirOf(cfg.DBPath) + "/trace-sessions",
 	})
+	var chat *tracechat.Service
 	if g := cfg.GitLab; g.Enabled() {
-		wk.Repos = repos.New(repos.Config{
+		rm := repos.New(repos.Config{
 			URL: g.URL, Username: g.Username, Token: g.Token, CAFile: g.CAFile, SkipTLSVerify: g.SkipTLSVerify,
 			Dir: g.ReposDir, Group: g.Group, RepoMap: g.RepoMap, Ref: g.Ref, Timeout: g.Timeout,
 		})
+		wk.Repos = rm
 		wk.Tracer = tracer
-		slog.Info("code tracing enabled", "gitlab", g.URL, "dir", g.ReposDir, "ref", g.Ref, "model", g.Model)
+		gl, err := gitlab.New(gitlab.Config{URL: g.URL, Token: g.Token, CAFile: g.CAFile, SkipTLSVerify: g.SkipTLSVerify})
+		if err != nil {
+			return err
+		}
+		wk.Deploys = gl
+		chat = tracechat.New(st, tracer, rm, gl, tracechat.Config{
+			GitLabURL: g.URL, Envs: config.Environments(g.EnvMap), Idle: g.SessionIdle, Retention: g.SessionRetention,
+			WorktreeTTL: g.WorktreeTTL, Concurrency: g.ChatConcurrency, LogDir: logDir(cfg),
+		}, ctx)
+		if err := chat.Recover(ctx); err != nil {
+			return err
+		}
+		slog.Info("code tracing enabled", "gitlab", g.URL, "dir", g.ReposDir, "ref", g.Ref, "model", g.Model, "env_map", g.EnvMap)
 	} else {
 		slog.Info("code tracing disabled (set GITLAB_URL and GITLAB_TOKEN to enable)")
 	}
@@ -137,10 +154,13 @@ func serve() error {
 		},
 		VPN: gp, Splunk: sp, Monitor: mon, Web: webFS, Version: version, BaseCtx: ctx,
 	}
+	if chat != nil {
+		a.Trace = chat
+	}
 
 	go mon.Run(ctx, cfg.WatchInterval)
 	go wk.Run(ctx)
-	go maintenance(ctx, st, cfg)
+	go maintenance(ctx, st, cfg, chat)
 
 	srv := &http.Server{
 		Addr:              cfg.ListenAddr,
@@ -167,13 +187,20 @@ func serve() error {
 }
 
 // maintenance purges expired sessions hourly and applies retention daily.
-func maintenance(ctx context.Context, st *store.Store, cfg config.Config) {
+func maintenance(ctx context.Context, st *store.Store, cfg config.Config, chat *tracechat.Service) {
 	tick := time.NewTicker(time.Hour)
 	defer tick.Stop()
 	var lastRetention time.Time
 	for {
 		if err := st.PurgeExpiredSessions(ctx); err != nil && ctx.Err() == nil {
 			slog.Error("purge sessions", "err", err)
+		}
+		if chat != nil {
+			if n, w, err := chat.Cleanup(ctx); err != nil && ctx.Err() == nil {
+				slog.Error("trace session cleanup", "err", err)
+			} else if n > 0 || w > 0 {
+				slog.Info("trace cleanup", "sessions_purged", n, "worktrees_removed", w)
+			}
 		}
 		if time.Since(lastRetention) >= 24*time.Hour {
 			now := time.Now()

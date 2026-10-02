@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -253,6 +254,81 @@ func (c ClaudeCode) run(ctx context.Context, dir string, args []string, prompt s
 		return "", "", fmt.Errorf("claude returned an error: %s", tail(out.Result))
 	}
 	return out.Result, usedModels(out.ModelUsage, c.Model), nil
+}
+
+// runStream executes the CLI with --output-format stream-json, reporting
+// each tool call to onTool as it happens, and returns the result text and
+// the models that served it.
+func (c ClaudeCode) runStream(ctx context.Context, dir string, args []string, prompt string, onTool func(tool string, input map[string]any)) (string, string, error) {
+	cmd := exec.CommandContext(ctx, c.Bin, args...)
+	cmd.Dir = dir
+	cmd.Stdin = strings.NewReader(prompt)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
+	cmd.WaitDelay = 5 * time.Second
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return "", "", err
+	}
+	if err := cmd.Start(); err != nil {
+		return "", "", fmt.Errorf("claude failed to start: %w", err)
+	}
+	type event struct {
+		Type    string `json:"type"`
+		IsError bool   `json:"is_error"`
+		Result  string `json:"result"`
+		// ModelUsage is keyed by the model IDs that served the request.
+		ModelUsage map[string]json.RawMessage `json:"modelUsage"`
+		Message    struct {
+			Content []struct {
+				Type  string         `json:"type"`
+				Name  string         `json:"name"`
+				Input map[string]any `json:"input"`
+			} `json:"content"`
+		} `json:"message"`
+	}
+	var final *event
+	var garbage bytes.Buffer
+	dec := json.NewDecoder(stdout)
+	for {
+		var ev event
+		if err := dec.Decode(&ev); err != nil {
+			if !errors.Is(err, io.EOF) {
+				// Not JSON: keep what is left for the error message.
+				_, _ = io.Copy(&garbage, io.MultiReader(dec.Buffered(), stdout))
+			}
+			break
+		}
+		switch ev.Type {
+		case "assistant":
+			if onTool != nil {
+				for _, b := range ev.Message.Content {
+					if b.Type == "tool_use" {
+						onTool(b.Name, b.Input)
+					}
+				}
+			}
+		case "result":
+			final = &ev
+		}
+	}
+	if err := cmd.Wait(); err != nil {
+		if ctx.Err() == context.DeadlineExceeded {
+			return "", "", fmt.Errorf("claude timed out after %s", c.Timeout)
+		}
+		if final == nil || !final.IsError {
+			return "", "", fmt.Errorf("claude failed: %w: %s", err, tail(stderr.String()+garbage.String()))
+		}
+	}
+	if final == nil {
+		return "", "", fmt.Errorf("claude output has no result: %s", tail(stderr.String()+garbage.String()))
+	}
+	if final.IsError {
+		return "", "", fmt.Errorf("claude returned an error: %s", tail(final.Result))
+	}
+	return final.Result, usedModels(final.ModelUsage, c.Model), nil
 }
 
 // usedModels lists the models in the CLI's modelUsage, falling back to the
