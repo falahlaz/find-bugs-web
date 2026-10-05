@@ -20,6 +20,8 @@ case "$*" in *"--add-dir "*)
 	echo '{"type":"system","subtype":"init"}'
 	echo "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"thinking\"},{\"type\":\"tool_use\",\"name\":\"Read\",\"input\":{\"file_path\":\"$dir/server/a.js\"}}]}}"
 	echo '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Grep","input":{"pattern":"ERROR 504","path":"logs.txt"}}]}}'
+	# Newer CLIs emit events whose fields clash with the assistant shape.
+	echo '{"type":"system","subtype":"permission_denied","message":"Bash is not allowed"}'
 	case "$input" in
 	*"An engineer asks:"*)
 		case "$input" in *"was restarted"*) r="Jawaban dengan recap" ;; *) r="Jawaban: baris 12" ;; esac
