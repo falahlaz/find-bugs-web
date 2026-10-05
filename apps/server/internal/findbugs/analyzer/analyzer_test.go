@@ -187,6 +187,9 @@ func TestTraceArgsAndPrompts(t *testing.T) {
 	if p := AskPrompt("q?", "", []Repo{repos[0], cfg}); !strings.Contains(p, "the last config commit before the error; its deployment to dev could not be confirmed") {
 		t.Errorf("ask prompt with fallback config:\n%s", p)
 	}
+	if !strings.Contains(p, "**Penyebab**") || !strings.Contains(p, "**Perbaikan**") {
+		t.Error("trace prompt does not ask for a structured explanation")
+	}
 	if !strings.Contains(TraceSystemPrompt, "for local development only") {
 		t.Error("system prompt does not explain the runtime config")
 	}

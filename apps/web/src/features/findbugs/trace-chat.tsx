@@ -1,5 +1,5 @@
 import { GitBranch, LoaderCircle, Lock, LockOpen, MessageSquare, Send } from 'lucide-react'
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,6 +10,7 @@ import type { Schemas } from '@/lib/api'
 import { formatDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { useAskTrace, useRetrace, useSetTraceOpen, useTrace, useTraceRefs, type TraceSession } from './queries'
+import { Markdown } from './markdown'
 import { CodeTraceView, FieldLabel } from './result-view'
 
 type CodeTrace = Schemas['CodeTrace']
@@ -306,48 +307,6 @@ function ChatMessage({ m, onShowTrace }: { m: TraceMessage; onShowTrace: (key: s
       {m.model && <div className="text-[11px] text-muted-foreground">{m.model}</div>}
     </div>
   )
-}
-
-/**
- * A small Markdown subset (code fences, inline code, bold) rendered as
- * React elements, never as HTML: answers quote untrusted logs and code.
- */
-function Markdown({ text }: { text: string }) {
-  const parts = text.split(/^```[^\n]*\n?/m)
-  return (
-    <div className="grid grid-cols-1 gap-2">
-      {parts.map((part, i) =>
-        i % 2 === 1 ? (
-          <pre key={i} className="overflow-auto rounded-md bg-muted px-3 py-2 font-mono text-[12.5px] leading-relaxed">
-            {part.replace(/\n$/, '')}
-          </pre>
-        ) : (
-          part
-            .split(/\n{2,}/)
-            .filter((p) => p.trim() !== '')
-            .map((p, j) => (
-              <p key={`${i}-${j}`} className="whitespace-pre-wrap [overflow-wrap:anywhere]">
-                {inline(p.trim())}
-              </p>
-            ))
-        ),
-      )}
-    </div>
-  )
-}
-
-function inline(s: string): ReactNode[] {
-  return s.split(/(`[^`\n]+`|\*\*[^*\n]+\*\*)/).map((t, i) => {
-    if (t.startsWith('`') && t.endsWith('`') && t.length > 2) {
-      return (
-        <code key={i} className="rounded bg-muted px-1 py-0.5 font-mono text-[12.5px]">
-          {t.slice(1, -1)}
-        </code>
-      )
-    }
-    if (t.startsWith('**') && t.endsWith('**') && t.length > 4) return <strong key={i}>{t.slice(2, -2)}</strong>
-    return <Fragment key={i}>{t}</Fragment>
-  })
 }
 
 function useDebounced<T>(value: T, ms: number): T {
