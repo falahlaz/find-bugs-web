@@ -104,6 +104,15 @@ Semua langkah dijalankan sebagai user Linux pemilik sesi GlobalProtect (bukan ro
 
 6. **Cloudflare Tunnel** ke `127.0.0.1:8080` (lihat `deploy/cloudflared-config.example.yml`). Disarankan pasang Cloudflare Access di depan subdomain. Server hanya listen di loopback.
 
+   SSH juga lewat tunnel (`ssh.arunoir.space → ssh://localhost:22`). Saat VPN aktif, default route pindah ke `gpd0`, jadi balasan SSH ke IP publik keluar lewat VPN dan koneksinya putus. SSH lewat tunnel tetap jalan. Di laptop, install `cloudflared`, lalu tambah ini ke `~/.ssh/config`:
+
+   ```
+   Host findbugs
+     HostName ssh.arunoir.space
+     User <user>
+     ProxyCommand cloudflared access ssh --hostname %h
+   ```
+
 ### Recovery manual
 
 Kalau daemon GlobalProtect nyangkut di "Retrieving configuration..." (semua Connect ditolak):
