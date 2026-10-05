@@ -7,6 +7,7 @@ import type { Schemas } from '@/lib/api'
 import { formatDateTime } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { LogViewer } from './log-viewer'
+import { Markdown } from './markdown'
 import { SeverityBadge } from './status-badge'
 import { useTypewriter } from './use-typewriter'
 
@@ -121,7 +122,14 @@ export function CodeTraceView({ trace }: { trace: CodeTrace }) {
       {trace.snippet && (
         <pre className="max-h-96 overflow-auto rounded-lg border bg-muted px-3 py-2.5 font-mono text-[12.5px] leading-relaxed">{trace.snippet}</pre>
       )}
-      <Field label="Penjelasan" value={trace.explanation} />
+      {trace.explanation && (
+        <div className="grid gap-1">
+          <FieldLabel>Penjelasan</FieldLabel>
+          <div className="text-sm leading-relaxed">
+            <Markdown text={trace.explanation} />
+          </div>
+        </div>
+      )}
       <div className="grid gap-1.5">
         <TraceVersion trace={trace} />
         {trace.config && <ConfigVersionLine config={trace.config} />}

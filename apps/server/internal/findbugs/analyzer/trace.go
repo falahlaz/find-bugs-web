@@ -129,10 +129,16 @@ const traceAnswerFormat = `Respond in the following JSON format only, no markdow
   "file": "path relative to the repository root",
   "line": 123,
   "function": "the enclosing function or method",
-  "explanation": "in Bahasa Indonesia: what this code does, why it fails for this transaction, and how to fix it"
+  "explanation": "short Markdown in Bahasa Indonesia, laid out as below"
 }
 
-If you cannot locate the code with reasonable confidence, set "status" to "not_found", leave the location fields empty (line 0) and say in "explanation" what you searched for and why it did not match.`
+Lay out "explanation" as Markdown (newlines escaped as \n inside the JSON string), with these three bold headings, each followed by short "- " bullet points rather than paragraphs:
+**Penyebab**: what fails and why, for this transaction (1-3 bullets).
+**Bukti**: what you checked that shows it, e.g. the log line or stack frame, the code at file:line, and the config file and version you read (2-5 bullets).
+**Perbaikan**: numbered steps ("1. "), the most direct fix first.
+Put file paths, identifiers, config keys and values in backticks. Keep each bullet to one or two sentences and the whole explanation under about 200 words unless the cause truly needs more.
+
+If you cannot locate the code with reasonable confidence, set "status" to "not_found", leave the location fields empty (line 0) and say in "explanation" (short Markdown bullets) what you searched for and why it did not match.`
 
 const tracePromptTemplate = `Transaction ID: %s
 
