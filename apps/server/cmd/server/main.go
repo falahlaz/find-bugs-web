@@ -27,6 +27,7 @@ import (
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/analyzer"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/gitlab"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/jobs"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/rcsession"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/repos"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/splunk"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/tracechat"
@@ -112,11 +113,14 @@ func serve() error {
 		SessionDir: dirOf(cfg.DBPath) + "/trace-sessions",
 	})
 	var chat *tracechat.Service
-	if g := cfg.GitLab; g.Enabled() {
-		rm := repos.New(repos.Config{
-			URL: g.URL, Username: g.Username, Token: g.Token, CAFile: g.CAFile, SkipTLSVerify: g.SkipTLSVerify,
-			Dir: g.ReposDir, Group: g.Group, RepoMap: g.RepoMap, Ref: g.Ref, Timeout: g.Timeout,
-		})
+	// One Manager for tracing and the Repo page, so work on a repo is
+	// serialised across both.
+	g := cfg.GitLab
+	rm := repos.New(repos.Config{
+		URL: g.URL, Username: g.Username, Token: g.Token, CAFile: g.CAFile, SkipTLSVerify: g.SkipTLSVerify,
+		Dir: g.ReposDir, Group: g.Group, RepoMap: g.RepoMap, Ref: g.Ref, Timeout: g.Timeout, CloneTimeout: g.CloneTimeout,
+	})
+	if g.Enabled() {
 		wk.Repos = rm
 		wk.Tracer = tracer
 		gl, err := gitlab.New(gitlab.Config{URL: g.URL, Token: g.Token, CAFile: g.CAFile, SkipTLSVerify: g.SkipTLSVerify})
@@ -156,6 +160,15 @@ func serve() error {
 	}
 	if chat != nil {
 		a.Trace = chat
+	}
+	if g.ReposDir != "" {
+		a.Repos = rm
+		a.RC = rcsession.New(rcsession.Config{
+			Script: cfg.RCSession.Script, Launcher: cfg.RCSession.Launcher, ClaudeBin: cfg.Claude.Bin, Root: g.ReposDir,
+		})
+		if !a.RC.Enabled() {
+			slog.Info("rc sessions disabled (no rc-session script)", "script", cfg.RCSession.Script)
+		}
 	}
 
 	go mon.Run(ctx, cfg.WatchInterval)

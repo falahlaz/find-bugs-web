@@ -610,6 +610,160 @@
         ],
         "type": "object"
       },
+      "RepoCloneView": {
+        "properties": {
+          "by": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          },
+          "startedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "cloning",
+              "failed"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "by",
+          "project",
+          "startedAt",
+          "state"
+        ],
+        "type": "object"
+      },
+      "RepoRequest": {
+        "properties": {
+          "project": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "type": "object"
+      },
+      "RepoSessionResponse": {
+        "properties": {
+          "output": {
+            "description": "What the rc-session script reported",
+            "type": "string"
+          },
+          "repo": {
+            "$ref": "#/components/schemas/RepoView"
+          }
+        },
+        "required": [
+          "output",
+          "repo"
+        ],
+        "type": "object"
+      },
+      "RepoSessionView": {
+        "properties": {
+          "name": {
+            "description": "tmux session name",
+            "type": "string"
+          },
+          "since": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "url": {
+            "description": "claude.ai link once connected",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "since"
+        ],
+        "type": "object"
+      },
+      "RepoView": {
+        "properties": {
+          "branch": {
+            "description": "Empty when HEAD is detached (a tracer store)",
+            "type": "string"
+          },
+          "commit": {
+            "type": "string"
+          },
+          "committedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          },
+          "session": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/RepoSessionView"
+              }
+            ],
+            "nullable": true
+          },
+          "shallow": {
+            "type": "boolean"
+          },
+          "subject": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project",
+          "shallow"
+        ],
+        "type": "object"
+      },
+      "ReposResponse": {
+        "properties": {
+          "canClone": {
+            "description": "GitLab URL and token are set",
+            "type": "boolean"
+          },
+          "canSession": {
+            "description": "The rc-session script is installed",
+            "type": "boolean"
+          },
+          "clones": {
+            "description": "Clones running or failed since the server started",
+            "items": {
+              "$ref": "#/components/schemas/RepoCloneView"
+            },
+            "type": "array"
+          },
+          "defaultGroup": {
+            "description": "Group of a project given without one",
+            "type": "string"
+          },
+          "repos": {
+            "items": {
+              "$ref": "#/components/schemas/RepoView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "canClone",
+          "canSession",
+          "clones",
+          "defaultGroup",
+          "repos"
+        ],
+        "type": "object"
+      },
       "Result": {
         "properties": {
           "codeTrace": {
@@ -2068,6 +2222,190 @@
         "summary": "Current user",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/repos": {
+      "get": {
+        "operationId": "listRepos",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReposResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Repos under GITLAB_REPOS_DIR and their rc sessions",
+        "tags": [
+          "repos"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
+      },
+      "post": {
+        "operationId": "cloneRepo",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoCloneView"
+                }
+              }
+            },
+            "description": "Accepted"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Clone a GitLab project (in the background)",
+        "tags": [
+          "repos"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
+      }
+    },
+    "/api/repos/session/start": {
+      "post": {
+        "operationId": "startRepoSession",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoSessionResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Start a Claude Remote Control session in a repo",
+        "tags": [
+          "repos"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
+      }
+    },
+    "/api/repos/session/stop": {
+      "post": {
+        "operationId": "stopRepoSession",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RepoSessionResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Stop a repo's Remote Control session",
+        "tags": [
+          "repos"
+        ],
+        "x-roles": [
+          "engineer"
         ]
       }
     },

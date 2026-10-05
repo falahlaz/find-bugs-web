@@ -3,6 +3,7 @@ import { createBrowserRouter, RouterProvider } from 'react-router'
 import { adminRoutes } from '@/features/admin/routes'
 import { connectionRoutes } from '@/features/connection/routes'
 import { findbugsRoutes } from '@/features/findbugs/routes'
+import { reposRoutes } from '@/features/repos/routes'
 import { AuthProvider } from './auth'
 import { Layout } from './layout'
 import { LoginPage } from './login-page'
@@ -22,6 +23,7 @@ const router = createBrowserRouter([
       ...findbugsRoutes,
       ...connectionRoutes,
       ...adminRoutes,
+      ...reposRoutes,
       { path: '*', element: <NotFound /> },
     ],
   },

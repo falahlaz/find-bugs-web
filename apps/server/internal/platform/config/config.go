@@ -43,6 +43,8 @@ type Config struct {
 
 	GitLab GitLab
 
+	RCSession RCSession
+
 	TelegramToken  string
 	TelegramChatID string
 }
@@ -106,6 +108,8 @@ type GitLab struct {
 	RepoMap map[string]string // container name -> group/project
 	Ref     string
 	Timeout time.Duration // per git command
+	// CloneTimeout bounds a full clone made from the Repo page.
+	CloneTimeout time.Duration
 	// MaxRepos caps how many repos one job traces into.
 	MaxRepos int
 	// Model and TraceTimeout are for the code-tracing pass, which needs a
@@ -159,6 +163,15 @@ func Environments(envMap map[string]string) []string {
 	return out
 }
 
+// RCSession configures starting Claude Remote Control sessions in the repos
+// under GitLab.ReposDir from the website, through the rc-session skill's
+// script.
+type RCSession struct {
+	Script string
+	// Launcher prefixes the script command; nil runs it directly.
+	Launcher []string
+}
+
 // DefaultEnvMap is GITLAB_ENV_MAP when unset.
 var DefaultEnvMap = map[string]string{
 	"tdw-dev": "dev", "tdw-staging": "staging", "tdw-preprod": "preprod", "blue": "blue", "tdw-webapi": "production",
@@ -166,6 +179,10 @@ var DefaultEnvMap = map[string]string{
 
 // Enabled reports whether code tracing is switched on and configured.
 func (g GitLab) Enabled() bool { return g.TraceEnabled && g.URL != "" && g.Token != "" }
+
+// CanClone reports whether repos can be cloned from GitLab (also with
+// tracing switched off).
+func (g GitLab) CanClone() bool { return g.URL != "" && g.Token != "" }
 
 type loader struct{ errs []string }
 
@@ -302,6 +319,7 @@ func Load(full bool) (Config, error) {
 		Group:         l.str("GITLAB_GROUP", "my-telkomsel"),
 		Ref:           l.str("GITLAB_REF", "main"),
 		Timeout:       l.dur("GITLAB_GIT_TIMEOUT", 3*time.Minute),
+		CloneTimeout:  l.dur("GITLAB_CLONE_TIMEOUT", 15*time.Minute),
 		MaxRepos:      l.int("CODE_TRACE_MAX_REPOS", 3),
 		Model:         l.str("CODE_TRACE_MODEL", "claude-opus-5-5"),
 		TraceTimeout:  l.dur("CODE_TRACE_TIMEOUT", 8*time.Minute),
@@ -312,6 +330,13 @@ func Load(full bool) (Config, error) {
 		SessionIdle:      l.dur("TRACE_SESSION_IDLE", 10*time.Minute),
 		SessionRetention: time.Duration(l.int("TRACE_SESSION_RETENTION_DAYS", 30)) * 24 * time.Hour,
 		ChatConcurrency:  l.int("TRACE_CHAT_CONCURRENCY", 2),
+	}
+	c.RCSession = RCSession{
+		Script:   l.str("RC_SESSION_SCRIPT", filepath.Join(home, ".claude", "skills", "rc-session", "rc-session.sh")),
+		Launcher: strings.Fields(l.str("RC_SESSION_LAUNCHER", "systemd-run --user --scope --quiet --collect --")),
+	}
+	if os.Getenv("RC_SESSION_LAUNCHER") == "-" {
+		c.RCSession.Launcher = nil
 	}
 	if raw := l.str("GITLAB_ENV_MAP", ""); raw != "" {
 		c.GitLab.EnvMap = nil

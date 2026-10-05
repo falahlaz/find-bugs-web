@@ -243,6 +243,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/repos": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Repos under GITLAB_REPOS_DIR and their rc sessions */
+        get: operations["listRepos"];
+        put?: never;
+        /** Clone a GitLab project (in the background) */
+        post: operations["cloneRepo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/repos/session/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a Claude Remote Control session in a repo */
+        post: operations["startRepoSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/repos/session/stop": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Stop a repo's Remote Control session */
+        post: operations["stopRepoSession"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/splunk/reauth": {
         parameters: {
             query?: never;
@@ -627,6 +679,53 @@ export interface components {
             error?: string;
             host: string;
             ok: boolean;
+        };
+        RepoCloneView: {
+            by: string;
+            error?: string;
+            project: string;
+            /** Format: date-time */
+            startedAt: string;
+            /** @enum {string} */
+            state: "cloning" | "failed";
+        };
+        RepoRequest: {
+            project: string;
+        };
+        RepoSessionResponse: {
+            /** @description What the rc-session script reported */
+            output: string;
+            repo: components["schemas"]["RepoView"];
+        };
+        RepoSessionView: {
+            /** @description tmux session name */
+            name: string;
+            /** Format: date-time */
+            since: string;
+            /** @description claude.ai link once connected */
+            url?: string;
+        };
+        RepoView: {
+            /** @description Empty when HEAD is detached (a tracer store) */
+            branch?: string;
+            commit?: string;
+            /** Format: date-time */
+            committedAt?: string | null;
+            project: string;
+            session?: components["schemas"]["RepoSessionView"] | null;
+            shallow: boolean;
+            subject?: string;
+        };
+        ReposResponse: {
+            /** @description GitLab URL and token are set */
+            canClone: boolean;
+            /** @description The rc-session script is installed */
+            canSession: boolean;
+            /** @description Clones running or failed since the server started */
+            clones: components["schemas"]["RepoCloneView"][];
+            /** @description Group of a project given without one */
+            defaultGroup: string;
+            repos: components["schemas"]["RepoView"][];
         };
         Result: {
             codeTrace?: components["schemas"]["CodeTrace"] | null;
@@ -1295,6 +1394,134 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    listRepos: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReposResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    cloneRepo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepoRequest"];
+            };
+        };
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoCloneView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    startRepoSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepoRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoSessionResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    stopRepoSession: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RepoRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RepoSessionResponse"];
                 };
             };
             /** @description Error */

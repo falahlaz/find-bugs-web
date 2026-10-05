@@ -148,6 +148,8 @@ type Config struct {
 	RepoMap map[string]string // container -> group/project overrides
 	Ref     string            // branch to check out when no other is asked for
 	Timeout time.Duration     // per git command
+	// CloneTimeout bounds a full clone made with Clone (Timeout otherwise).
+	CloneTimeout time.Duration
 }
 
 // Checkout is a read-only worktree of one commit of a project.
@@ -177,6 +179,9 @@ func New(cfg Config) *Manager {
 	}
 	if cfg.Username == "" {
 		cfg.Username = "oauth2"
+	}
+	if cfg.CloneTimeout <= 0 {
+		cfg.CloneTimeout = 15 * time.Minute
 	}
 	cfg.URL = strings.TrimRight(cfg.URL, "/")
 	return &Manager{cfg: cfg, locks: map[string]*sync.Mutex{}}
@@ -241,7 +246,13 @@ func (m *Manager) Sync(ctx context.Context, container, ref string) (Checkout, er
 	commit := ref
 	if !fullSHA.MatchString(ref) || !m.hasCommit(ctx, store, ref) {
 		remote := m.cfg.URL + "/" + project + ".git"
-		if _, err := m.git(ctx, store, "fetch", "--quiet", "--depth", "1", "--no-tags", remote, ref); err != nil {
+		args := []string{"fetch", "--quiet", "--no-tags"}
+		// A full clone made with Clone stays full; a depth would cut its
+		// history.
+		if !m.isFullClone(ctx, store) {
+			args = append(args, "--depth", "1")
+		}
+		if _, err := m.git(ctx, store, append(args, remote, ref)...); err != nil {
 			return co, err
 		}
 		out, err := m.git(ctx, store, "rev-parse", "FETCH_HEAD^{commit}")
@@ -291,6 +302,17 @@ func (m *Manager) initStore(ctx context.Context, store string) error {
 		return err
 	}
 	return nil
+}
+
+// isFullClone reports whether dir has a checked-out branch with its whole
+// history. A store made by initStore has no HEAD commit, so it is not one
+// even though git does not call it shallow.
+func (m *Manager) isFullClone(ctx context.Context, dir string) bool {
+	if _, err := m.git(ctx, dir, "rev-parse", "--verify", "-q", "HEAD^{commit}"); err != nil {
+		return false
+	}
+	out, err := m.git(ctx, dir, "rev-parse", "--is-shallow-repository")
+	return err == nil && strings.TrimSpace(out) == "false"
 }
 
 func (m *Manager) hasCommit(ctx context.Context, store, sha string) bool {
@@ -347,11 +369,134 @@ func (m *Manager) Prune(ctx context.Context, ttl time.Duration, keep func(dir st
 	return n, nil
 }
 
+// Repo is a repository under Dir: a store the tracer fetches into, or a
+// full clone made with Clone.
+type Repo struct {
+	Project     string // group/project
+	Dir         string
+	Branch      string // "" when HEAD is detached or unborn
+	Commit      string
+	Subject     string
+	CommittedAt time.Time
+	Shallow     bool
+}
+
+// List returns the repos under Dir, sorted by project. Directories starting
+// with a dot (the worktrees, clones in progress) are skipped.
+func (m *Manager) List(ctx context.Context) ([]Repo, error) {
+	const maxDepth = 4
+	var out []Repo
+	root := filepath.Clean(m.cfg.Dir)
+	err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			if p == root && errors.Is(err, os.ErrNotExist) {
+				return filepath.SkipAll
+			}
+			return nil
+		}
+		if !d.IsDir() || p == root {
+			return nil
+		}
+		if strings.HasPrefix(d.Name(), ".") {
+			return filepath.SkipDir
+		}
+		rel, _ := filepath.Rel(root, p)
+		if _, err := os.Stat(filepath.Join(p, ".git")); err == nil {
+			out = append(out, m.describe(ctx, filepath.ToSlash(rel), p))
+			return filepath.SkipDir
+		}
+		if strings.Count(rel, string(filepath.Separator)) >= maxDepth-1 {
+			return filepath.SkipDir
+		}
+		return nil
+	})
+	sort.Slice(out, func(i, j int) bool { return out[i].Project < out[j].Project })
+	return out, err
+}
+
+// describe reads a repo's branch and last commit; what cannot be read is
+// left empty.
+func (m *Manager) describe(ctx context.Context, project, dir string) Repo {
+	r := Repo{Project: project, Dir: dir}
+	if out, err := m.git(ctx, dir, "symbolic-ref", "--short", "-q", "HEAD"); err == nil {
+		r.Branch = strings.TrimSpace(out)
+	}
+	if out, err := m.git(ctx, dir, "log", "-1", "--format=%H%x00%s%x00%cI"); err == nil {
+		if f := strings.SplitN(strings.TrimSpace(out), "\x00", 3); len(f) == 3 {
+			r.Commit, r.Subject = f[0], f[1]
+			r.CommittedAt, _ = time.Parse(time.RFC3339, f[2])
+		}
+	}
+	if out, err := m.git(ctx, dir, "rev-parse", "--is-shallow-repository"); err == nil {
+		r.Shallow = strings.TrimSpace(out) == "true"
+	}
+	return r
+}
+
+// ErrExists is returned by Clone when the project is already under Dir.
+var ErrExists = errors.New("repo sudah ada")
+
+// ErrInvalidProject is returned by Clone for a name that is not a GitLab
+// project path.
+var ErrInvalidProject = errors.New("nama project tidak valid")
+
+// ProjectPath turns a bare project name into <Group>/<name>; a path with a
+// group is returned as is. It reports whether the result is a valid path.
+func (m *Manager) ProjectPath(name string) (string, bool) {
+	name = strings.Trim(strings.TrimSpace(name), "/")
+	name = strings.TrimSuffix(name, ".git")
+	if !strings.Contains(name, "/") {
+		name = m.cfg.Group + "/" + name
+	}
+	return name, validProject(name)
+}
+
+// Clone makes a full clone of project (a path or a bare name in Group) at
+// <Dir>/<project> on the remote's default branch, and returns its
+// directory. The token is passed the same way as for Sync, so it is not
+// stored in the clone.
+func (m *Manager) Clone(ctx context.Context, project string) (string, error) {
+	project, ok := m.ProjectPath(project)
+	if !ok {
+		return "", ErrInvalidProject
+	}
+	dest := filepath.Join(m.cfg.Dir, filepath.FromSlash(project))
+	defer m.lock(project)()
+	if _, err := os.Stat(dest); err == nil {
+		return dest, ErrExists
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return dest, err
+	}
+	parent := filepath.Dir(dest)
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		return dest, err
+	}
+	// Clone next to the destination under a dot name, which List and the
+	// rc-session lookup skip, then move it into place.
+	tmp, err := os.MkdirTemp(parent, ".clone-"+filepath.Base(dest)+"-")
+	if err != nil {
+		return dest, err
+	}
+	defer os.RemoveAll(tmp)
+	remote := m.cfg.URL + "/" + project + ".git"
+	if _, err := m.gitTimeout(ctx, m.cfg.CloneTimeout, parent, "clone", "--quiet", "--origin", "origin", remote, tmp); err != nil {
+		return dest, err
+	}
+	if err := os.Rename(tmp, dest); err != nil {
+		return dest, err
+	}
+	return dest, nil
+}
+
 // git runs one git command. Credentials and TLS settings are passed in the
 // environment of that process only, so they never land in .git/config, the
 // remote URL or the process arguments.
 func (m *Manager) git(ctx context.Context, dir string, args ...string) (string, error) {
-	ctx, cancel := context.WithTimeout(ctx, m.cfg.Timeout)
+	return m.gitTimeout(ctx, m.cfg.Timeout, dir, args...)
+}
+
+func (m *Manager) gitTimeout(ctx context.Context, timeout time.Duration, dir string, args ...string) (string, error) {
+	ctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = dir
@@ -363,7 +508,7 @@ func (m *Manager) git(ctx context.Context, dir string, args ...string) (string, 
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() == context.DeadlineExceeded {
-			return "", fmt.Errorf("git %s timed out after %s", args[0], m.cfg.Timeout)
+			return "", fmt.Errorf("git %s timed out after %s", args[0], timeout)
 		}
 		return "", fmt.Errorf("git %s: %w: %s", args[0], err, m.scrub(strings.TrimSpace(stderr.String())))
 	}

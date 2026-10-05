@@ -175,3 +175,66 @@ func TestEnvKeepsTokenOutOfArgs(t *testing.T) {
 		t.Errorf("scrub = %s", s)
 	}
 }
+
+// TestCloneAndList clones a project in full, lists it next to a tracer
+// store, and checks a later Sync does not make the clone shallow.
+func TestCloneAndList(t *testing.T) {
+	root := t.TempDir()
+	remote := filepath.Join(root, "gitlab")
+	work := filepath.Join(root, "work")
+	git(t, root, "init", "-q", "--bare", "-b", "main", filepath.Join(remote, "grp", "svc.git"))
+	git(t, root, "clone", "-q", filepath.Join(remote, "grp", "svc.git"), work)
+	for _, v := range []string{"one", "two"} {
+		os.WriteFile(filepath.Join(work, "a.js"), []byte(v), 0o644)
+		git(t, work, "add", ".")
+		git(t, work, "commit", "-qm", v)
+	}
+	git(t, work, "push", "-q", "origin", "HEAD:main")
+	git(t, root, "init", "-q", "--bare", "-b", "main", filepath.Join(remote, "grp", "sub", "other.git"))
+	git(t, work, "push", "-q", filepath.Join(remote, "grp", "sub", "other.git"), "HEAD:main")
+
+	repos := filepath.Join(root, "repos")
+	m := New(Config{URL: "file://" + remote, Token: "glpat-secret", Dir: repos, Group: "grp"})
+	ctx := context.Background()
+
+	if l, err := m.List(ctx); err != nil || len(l) != 0 {
+		t.Fatalf("List of missing dir = %+v, %v", l, err)
+	}
+	dir, err := m.Clone(ctx, "svc")
+	if err != nil || dir != filepath.Join(repos, "grp", "svc") {
+		t.Fatalf("Clone = %s, %v", dir, err)
+	}
+	cfg, _ := os.ReadFile(filepath.Join(dir, ".git", "config"))
+	if strings.Contains(string(cfg), "secret") || strings.Contains(string(cfg), "extraHeader") {
+		t.Fatalf("credentials leaked into .git/config:\n%s", cfg)
+	}
+	if _, err := m.Clone(ctx, "grp/svc"); err != ErrExists {
+		t.Fatalf("second Clone err = %v", err)
+	}
+	for _, bad := range []string{"../x", "grp/.hidden", "a b", ""} {
+		if _, err := m.Clone(ctx, bad); err != ErrInvalidProject {
+			t.Errorf("Clone(%q) err = %v", bad, err)
+		}
+	}
+	// A nested group, and a tracer worktree that List must skip.
+	if _, err := m.Clone(ctx, "grp/sub/other.git"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.Sync(ctx, "svc", ""); err != nil {
+		t.Fatal(err)
+	}
+	if git(t, dir, "rev-parse", "--is-shallow-repository") != "false" {
+		t.Fatal("Sync made the full clone shallow")
+	}
+	l, err := m.List(ctx)
+	if err != nil || len(l) != 2 {
+		t.Fatalf("List = %+v, %v", l, err)
+	}
+	if l[0].Project != "grp/sub/other" || l[1].Project != "grp/svc" || l[1].Branch != "main" ||
+		l[1].Subject != "two" || l[1].Shallow || l[1].CommittedAt.IsZero() || len(l[1].Commit) != 40 {
+		t.Fatalf("List = %+v", l)
+	}
+	if entries, _ := os.ReadDir(filepath.Join(repos, "grp")); len(entries) != 2 {
+		t.Fatalf("leftover temp dirs: %v", entries)
+	}
+}
