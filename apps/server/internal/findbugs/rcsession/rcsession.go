@@ -96,7 +96,7 @@ func (m *Manager) Sessions(ctx context.Context) (map[string]Session, error) {
 		if sec, err := strconv.ParseInt(f[2], 10, 64); err == nil {
 			s.Since = time.Unix(sec, 0)
 		}
-		if pane, err := m.run(ctx, 5*time.Second, m.cfg.Tmux, "capture-pane", "-J", "-p", "-t", "="+s.Name); err == nil {
+		if pane, err := m.run(ctx, 5*time.Second, m.cfg.Tmux, "capture-pane", "-J", "-p", "-t", "="+s.Name+":"); err == nil {
 			s.URL = urlRe.FindString(pane)
 		}
 		sessions[s.Dir] = s
