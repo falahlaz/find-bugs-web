@@ -293,13 +293,19 @@ func (c ClaudeCode) runStream(ctx context.Context, dir string, args []string, pr
 	var garbage bytes.Buffer
 	dec := json.NewDecoder(stdout)
 	for {
-		var ev event
-		if err := dec.Decode(&ev); err != nil {
+		var raw json.RawMessage
+		if err := dec.Decode(&raw); err != nil {
 			if !errors.Is(err, io.EOF) {
 				// Not JSON: keep what is left for the error message.
 				_, _ = io.Copy(&garbage, io.MultiReader(dec.Buffered(), stdout))
 			}
 			break
+		}
+		var ev event
+		if err := json.Unmarshal(raw, &ev); err != nil {
+			// Valid JSON in a shape we do not model (e.g. a system event
+			// whose "message" is a string): skip it, keep reading.
+			continue
 		}
 		switch ev.Type {
 		case "assistant":
