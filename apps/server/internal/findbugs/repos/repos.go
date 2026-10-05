@@ -284,6 +284,139 @@ func (m *Manager) Sync(ctx context.Context, container, ref string) (Checkout, er
 	return co, nil
 }
 
+// FetchBranches brings branches of project up to date in a blobless store
+// at <Dir>/<project>: commits and trees only, file contents are fetched
+// when a SparseCheckout needs them. Each branch lands in
+// refs/remotes/origin/<branch>. Used for repos too big to check out whole,
+// like the JSON config repo.
+func (m *Manager) FetchBranches(ctx context.Context, project string, branches []string) error {
+	if !validProject(project) {
+		return fmt.Errorf("invalid GitLab project %q", project)
+	}
+	if len(branches) == 0 {
+		return errors.New("no branches to fetch")
+	}
+	args := []string{"fetch", "--quiet", "--no-tags", "--filter=blob:none", "origin"}
+	for _, b := range branches {
+		if !refName.MatchString(b) || strings.Contains(b, "..") {
+			return fmt.Errorf("invalid branch %q", b)
+		}
+		args = append(args, fmt.Sprintf("+refs/heads/%s:refs/remotes/origin/%s", b, b))
+	}
+	store := filepath.Join(m.cfg.Dir, filepath.FromSlash(project))
+	defer m.lock(project)()
+	if err := m.initPartialStore(ctx, store, project); err != nil {
+		return err
+	}
+	_, err := m.git(ctx, store, args...)
+	return err
+}
+
+// initPartialStore creates a blobless store whose origin remote is marked
+// as a promisor, so missing file contents are fetched on demand. The remote
+// URL holds no credentials; they come from the environment as for Sync.
+func (m *Manager) initPartialStore(ctx context.Context, store, project string) error {
+	if err := m.initStore(ctx, store); err != nil {
+		return err
+	}
+	if _, err := m.git(ctx, store, "config", "--get", "remote.origin.url"); err == nil {
+		return nil
+	}
+	for _, kv := range [][]string{
+		{"remote", "add", "origin", m.cfg.URL + "/" + project + ".git"},
+		{"config", "remote.origin.promisor", "true"},
+		{"config", "remote.origin.partialclonefilter", "blob:none"},
+	} {
+		if _, err := m.git(ctx, store, kv...); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// CommitBefore returns the last commit on a branch fetched with
+// FetchBranches committed at or before t (the tip when t is zero).
+func (m *Manager) CommitBefore(ctx context.Context, project, branch string, t time.Time) (string, error) {
+	if !validProject(project) || !refName.MatchString(branch) || strings.Contains(branch, "..") {
+		return "", fmt.Errorf("invalid project %q or branch %q", project, branch)
+	}
+	args := []string{"rev-list", "-1"}
+	if !t.IsZero() {
+		args = append(args, fmt.Sprintf("--before=%d", t.Unix()))
+	}
+	store := filepath.Join(m.cfg.Dir, filepath.FromSlash(project))
+	defer m.lock(project)()
+	out, err := m.git(ctx, store, append(args, "refs/remotes/origin/"+branch, "--")...)
+	if err != nil {
+		return "", err
+	}
+	sha := strings.TrimSpace(out)
+	if sha == "" {
+		return "", fmt.Errorf("no commit on %s before %s", branch, t.Format(time.RFC3339))
+	}
+	return sha, nil
+}
+
+// SparseCheckout makes a worktree of commit in project's blobless store
+// holding only paths (directories relative to the repo root), and returns
+// it. Like Sync, each commit gets its own worktree that never changes.
+func (m *Manager) SparseCheckout(ctx context.Context, project, commit string, paths []string) (Checkout, error) {
+	co := Checkout{Project: project, Ref: commit, Commit: commit}
+	if !validProject(project) {
+		return co, fmt.Errorf("invalid GitLab project %q", project)
+	}
+	if !fullSHA.MatchString(commit) {
+		return co, fmt.Errorf("invalid commit %q", commit)
+	}
+	patterns := []string{"set", "--no-cone"}
+	for _, p := range paths {
+		p = strings.Trim(filepath.ToSlash(p), "/")
+		if p == "" || !validProject("x/"+p) {
+			return co, fmt.Errorf("invalid path %q", p)
+		}
+		patterns = append(patterns, "/"+p+"/")
+	}
+	store := filepath.Join(m.cfg.Dir, filepath.FromSlash(project))
+	defer m.lock(project)()
+	if err := m.initPartialStore(ctx, store, project); err != nil {
+		return co, err
+	}
+	if !m.hasCommit(ctx, store, commit) {
+		if _, err := m.git(ctx, store, "fetch", "--quiet", "--no-tags", "--filter=blob:none", "origin", commit); err != nil {
+			return co, err
+		}
+	}
+	co.Dir = m.worktreePath(project, commit)
+	if out, err := m.git(ctx, co.Dir, "rev-parse", "HEAD"); err == nil && strings.TrimSpace(out) == commit {
+		now := time.Now()
+		_ = os.Chtimes(co.Dir, now, now)
+		return co, nil
+	}
+	_ = os.RemoveAll(co.Dir)
+	if _, err := m.git(ctx, store, "worktree", "prune"); err != nil {
+		return co, err
+	}
+	if err := os.MkdirAll(filepath.Dir(co.Dir), 0o755); err != nil {
+		return co, err
+	}
+	fail := func(err error) (Checkout, error) {
+		_ = os.RemoveAll(co.Dir)
+		_, _ = m.git(ctx, store, "worktree", "prune")
+		return co, err
+	}
+	if _, err := m.git(ctx, store, "worktree", "add", "--quiet", "--no-checkout", "--detach", co.Dir, commit); err != nil {
+		return fail(err)
+	}
+	if _, err := m.git(ctx, co.Dir, append([]string{"sparse-checkout"}, patterns...)...); err != nil {
+		return fail(err)
+	}
+	// Fetches the missing file contents of paths in one batch.
+	if _, err := m.git(ctx, co.Dir, "checkout", "--quiet"); err != nil {
+		return fail(err)
+	}
+	return co, nil
+}
+
 // initStore creates the project's object store if needed. Older versions
 // kept a clone with a checkout of main there; it works as a store as is.
 func (m *Manager) initStore(ctx context.Context, store string) error {

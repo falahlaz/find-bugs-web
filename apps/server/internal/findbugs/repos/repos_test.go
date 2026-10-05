@@ -238,3 +238,84 @@ func TestCloneAndList(t *testing.T) {
 		t.Fatalf("leftover temp dirs: %v", entries)
 	}
 }
+
+// TestSparseConfig fetches env branches into a blobless store, picks the
+// commit before a time and checks out only one directory of it.
+func TestSparseConfig(t *testing.T) {
+	root := t.TempDir()
+	remote := filepath.Join(root, "gitlab")
+	bare := filepath.Join(remote, "grp", "ops", "cfg.git")
+	work := filepath.Join(root, "work")
+	git(t, root, "init", "-q", "--bare", "-b", "dev", bare)
+	// Like GitLab: serve partial clones and fetches of any commit.
+	git(t, bare, "config", "uploadpack.allowFilter", "true")
+	git(t, bare, "config", "uploadpack.allowAnySHA1InWant", "true")
+	git(t, root, "clone", "-q", bare, work)
+	commit := func(date, key string) string {
+		os.MkdirAll(filepath.Join(work, "json-files"), 0o755)
+		os.MkdirAll(filepath.Join(work, "big"), 0o755)
+		os.WriteFile(filepath.Join(work, "json-files", "generalConfig.json"), []byte(`{"`+key+`":"1"}`), 0o644)
+		os.WriteFile(filepath.Join(work, "big", "blob.bin"), []byte(key), 0o644)
+		git(t, work, "add", ".")
+		cmd := exec.Command("git", "commit", "-qm", key)
+		cmd.Dir = work
+		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t",
+			"GIT_COMMITTER_DATE="+date, "GIT_AUTHOR_DATE="+date)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("commit: %v %s", err, out)
+		}
+		git(t, work, "push", "-q", "origin", "HEAD:dev")
+		return git(t, work, "rev-parse", "HEAD")
+	}
+	missing := commit("2026-10-05T16:51:00+07:00", "other")
+	fixed := commit("2026-10-05T19:41:00+07:00", "enable_new_categories_version")
+
+	repos := filepath.Join(root, "repos")
+	m := New(Config{URL: "file://" + remote, Token: "glpat-secret", Dir: repos, Group: "grp"})
+	ctx := context.Background()
+	if err := m.FetchBranches(ctx, "grp/ops/cfg", []string{"dev"}); err != nil {
+		t.Fatal(err)
+	}
+	errAt := time.Date(2026, 10, 5, 9, 59, 24, 0, time.UTC) // 16:59:24 +07
+	sha, err := m.CommitBefore(ctx, "grp/ops/cfg", "dev", errAt)
+	if err != nil || sha != missing {
+		t.Fatalf("CommitBefore = %s, %v; want %s", sha, err, missing)
+	}
+	if tip, err := m.CommitBefore(ctx, "grp/ops/cfg", "dev", time.Time{}); err != nil || tip != fixed {
+		t.Fatalf("tip = %s, %v", tip, err)
+	}
+	if _, err := m.CommitBefore(ctx, "grp/ops/cfg", "dev", time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)); err == nil {
+		t.Fatal("no error for a time before the first commit")
+	}
+
+	co, err := m.SparseCheckout(ctx, "grp/ops/cfg", sha, []string{"json-files"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(co.Dir, "json-files", "generalConfig.json")); string(b) != `{"other":"1"}` {
+		t.Fatalf("generalConfig.json = %q", b)
+	}
+	if _, err := os.Stat(filepath.Join(co.Dir, "big")); !os.IsNotExist(err) {
+		t.Fatalf("sparse checkout has big/: %v", err)
+	}
+	cfg, _ := os.ReadFile(filepath.Join(repos, "grp", "ops", "cfg", ".git", "config"))
+	if strings.Contains(string(cfg), "secret") || strings.Contains(string(cfg), "extraHeader") {
+		t.Fatalf("credentials leaked into .git/config:\n%s", cfg)
+	}
+	// Again: the same worktree, untouched.
+	if co2, err := m.SparseCheckout(ctx, "grp/ops/cfg", sha, []string{"json-files"}); err != nil || co2.Dir != co.Dir {
+		t.Fatalf("second checkout = %+v, %v", co2, err)
+	}
+	// A commit not fetched yet (pushed after FetchBranches) is fetched by SHA.
+	later := commit("2026-10-05T20:14:00+07:00", "another_key")
+	co3, err := m.SparseCheckout(ctx, "grp/ops/cfg", later, []string{"json-files"})
+	if err != nil || co3.Dir == co.Dir {
+		t.Fatalf("checkout of new commit = %+v, %v", co3, err)
+	}
+	if _, err := m.SparseCheckout(ctx, "grp/ops/cfg", sha, []string{"../x"}); err == nil {
+		t.Fatal("no error for a path outside the repo")
+	}
+	if err := m.FetchBranches(ctx, "grp/ops/cfg", []string{"--upload-pack=x"}); err == nil {
+		t.Fatal("no error for an option-like branch")
+	}
+}

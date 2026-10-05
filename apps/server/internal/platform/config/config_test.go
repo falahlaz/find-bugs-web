@@ -41,6 +41,16 @@ func TestLoadGitLab(t *testing.T) {
 		c.GitLab.WorktreeTTL != 14*24*time.Hour || c.GitLab.SessionIdle != 10*time.Minute || c.GitLab.ChatConcurrency != 2 {
 		t.Fatalf("defaults = %+v, %v", c.GitLab, err)
 	}
+	if c.GitLab.ConfigProject != "my-telkomsel/devsecops/json-config-updater" || c.GitLab.ConfigPath != "json-files" || c.GitLab.ConfigDeployJob != "deploy_configmaps" {
+		t.Fatalf("config repo defaults = %+v", c.GitLab)
+	}
+	t.Setenv("GITLAB_CONFIG_PROJECT", "-")
+	t.Setenv("GITLAB_CONFIG_BRANCH_MAP", `{"blue":"tdw-blue"}`)
+	if c, err := Load(true); err != nil || c.GitLab.ConfigProject != "" || c.GitLab.ConfigBranches["blue"] != "tdw-blue" {
+		t.Fatalf("config repo off = %+v, %v", c.GitLab, err)
+	}
+	t.Setenv("GITLAB_CONFIG_PROJECT", "")
+	t.Setenv("GITLAB_CONFIG_BRANCH_MAP", "")
 
 	t.Setenv("GITLAB_URL", "https://gitlab.example.com/")
 	t.Setenv("GITLAB_TOKEN", "glpat-x")

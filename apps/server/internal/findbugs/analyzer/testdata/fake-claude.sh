@@ -16,7 +16,16 @@ case "$*" in *"--add-dir "*)
 	case "$*" in *"--session-id "*|*"--resume "*) ;; *) echo "session flag missing" >&2; exit 8 ;; esac
 	case "$*" in *"--no-session-persistence"*) echo "session not persisted" >&2; exit 9 ;; esac
 	grep -q "ERROR 504" logs.txt || { echo "logs.txt missing" >&2; exit 5; }
-	dir=${*##*--add-dir }
+	# The first --add-dir is the service checkout; the runtime config, when
+	# there is one, comes last.
+	rest=${*#*--add-dir }
+	dir=${rest%% *}
+	# A re-trace names its target checkout.
+	target=$(printf '%s\n' "$input" | sed -n 's/.*, checked out at \(.*\)\.$/\1/p' | head -n 1)
+	[ -n "$target" ] && dir=$target
+	case "$input" in *"Runtime JSON config ("*)
+		echo "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"name\":\"Read\",\"input\":{\"file_path\":\"${*##*--add-dir }/generalConfig.json\"}}]}}" ;;
+	esac
 	echo '{"type":"system","subtype":"init"}'
 	echo "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"thinking\"},{\"type\":\"tool_use\",\"name\":\"Read\",\"input\":{\"file_path\":\"$dir/server/a.js\"}}]}}"
 	echo '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Grep","input":{"pattern":"ERROR 504","path":"logs.txt"}}]}}'

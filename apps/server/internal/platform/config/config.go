@@ -133,6 +133,15 @@ type GitLab struct {
 	SessionRetention time.Duration
 	// ChatConcurrency caps the chat and re-trace turns running at once.
 	ChatConcurrency int
+	// ConfigProject is the repo the servers' JSON config (ConfigMaps) is
+	// built from, one branch per environment; "" leaves it out of traces.
+	// ConfigPath is the directory of the JSON files in it, ConfigBranches
+	// maps a GitLab environment to its branch (the same name when absent)
+	// and ConfigDeployJob starts the names of the jobs deploying a branch.
+	ConfigProject   string
+	ConfigPath      string
+	ConfigBranches  map[string]string
+	ConfigDeployJob string
 }
 
 // Environments lists the GitLab environments of an env map once each, the
@@ -330,6 +339,18 @@ func Load(full bool) (Config, error) {
 		SessionIdle:      l.dur("TRACE_SESSION_IDLE", 10*time.Minute),
 		SessionRetention: time.Duration(l.int("TRACE_SESSION_RETENTION_DAYS", 30)) * 24 * time.Hour,
 		ChatConcurrency:  l.int("TRACE_CHAT_CONCURRENCY", 2),
+
+		ConfigProject:   l.str("GITLAB_CONFIG_PROJECT", "my-telkomsel/devsecops/json-config-updater"),
+		ConfigPath:      strings.Trim(l.str("GITLAB_CONFIG_PATH", "json-files"), "/"),
+		ConfigDeployJob: l.str("GITLAB_CONFIG_DEPLOY_JOB", "deploy_configmaps"),
+	}
+	if os.Getenv("GITLAB_CONFIG_PROJECT") == "-" {
+		c.GitLab.ConfigProject = ""
+	}
+	if raw := l.str("GITLAB_CONFIG_BRANCH_MAP", ""); raw != "" {
+		if err := json.Unmarshal([]byte(raw), &c.GitLab.ConfigBranches); err != nil {
+			l.errs = append(l.errs, fmt.Sprintf("GITLAB_CONFIG_BRANCH_MAP: %v", err))
+		}
 	}
 	c.RCSession = RCSession{
 		Script:   l.str("RC_SESSION_SCRIPT", filepath.Join(home, ".claude", "skills", "rc-session", "rc-session.sh")),

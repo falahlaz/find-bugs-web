@@ -402,6 +402,36 @@ type CodeTrace struct {
 	Explanation  string `json:"explanation,omitempty"`
 	URL          string `json:"url,omitempty"` // GitLab link to the line
 	Model        string `json:"model,omitempty"`
+	// Config is the runtime JSON config the trace could read; nil when
+	// config lookups are off.
+	Config *ConfigVersion `json:"config,omitempty"`
+}
+
+// ConfigVersion is the version of the JSON config repo an environment ran
+// with: the commit deployed to its ConfigMaps when the error happened
+// (Source RefDeployed) or the last commit on its branch before then
+// (RefFallback, Note says why). Error is set instead when it could not be
+// read.
+type ConfigVersion struct {
+	Project      string `json:"project"`
+	Env          string `json:"env,omitempty"`
+	Branch       string `json:"branch,omitempty"`
+	Path         string `json:"path,omitempty"` // directory of the JSON files
+	Commit       string `json:"commit,omitempty"`
+	Source       string `json:"source,omitempty"`
+	Note         string `json:"note,omitempty"`
+	DeployedAt   string `json:"deployedAt,omitempty"` // RFC 3339
+	DeployJobURL string `json:"deployJobUrl,omitempty"`
+	URL          string `json:"url,omitempty"` // GitLab link to the directory
+	Error        string `json:"error,omitempty"`
+}
+
+// SetURL links the config directory at its commit in GitLab at base.
+func (v *ConfigVersion) SetURL(base string) {
+	if base == "" || v.Project == "" || v.Commit == "" {
+		return
+	}
+	v.URL = fmt.Sprintf("%s/%s/-/tree/%s/%s", base, v.Project, v.Commit, v.Path)
 }
 
 // SetURL links a found trace to its line in GitLab at base.

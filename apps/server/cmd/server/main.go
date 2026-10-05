@@ -25,6 +25,7 @@ import (
 
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/api"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/analyzer"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/configrepo"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/gitlab"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/jobs"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/rcsession"
@@ -135,7 +136,15 @@ func serve() error {
 		if err := chat.Recover(ctx); err != nil {
 			return err
 		}
-		slog.Info("code tracing enabled", "gitlab", g.URL, "dir", g.ReposDir, "ref", g.Ref, "model", g.Model, "env_map", g.EnvMap)
+		if g.ConfigProject != "" {
+			src := &configrepo.Source{
+				Cfg:   configrepo.Config{Project: g.ConfigProject, Path: g.ConfigPath, Branches: g.ConfigBranches, JobPrefix: g.ConfigDeployJob},
+				Repos: rm, Deploys: gl,
+			}
+			wk.Config, chat.ConfigRepo = src, src
+		}
+		slog.Info("code tracing enabled", "gitlab", g.URL, "dir", g.ReposDir, "ref", g.Ref, "model", g.Model, "env_map", g.EnvMap,
+			"config_repo", g.ConfigProject, "config_branches", g.ConfigBranches)
 	} else {
 		slog.Info("code tracing disabled (set GITLAB_URL and GITLAB_TOKEN to enable)")
 	}

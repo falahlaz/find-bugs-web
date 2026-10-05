@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/analyzer"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/configrepo"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/gitlab"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/repos"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/store"
@@ -277,4 +278,61 @@ type blockingTracer struct {
 func (b blockingTracer) Ask(ctx context.Context, s analyzer.Session, q, recap string, rs []analyzer.Repo, p analyzer.Progress) (analyzer.Answer, error) {
 	<-b.block
 	return b.Fake.Ask(ctx, s, q, recap, rs, p)
+}
+
+type fakeConfig struct{ before []time.Time }
+
+func (f *fakeConfig) Checkout(_ context.Context, env string, before time.Time) (configrepo.Checkout, error) {
+	f.before = append(f.before, before)
+	v := store.ConfigVersion{Project: "ops/cfg", Env: env, Branch: env, Path: "json-files", Commit: "cfg-" + env, Source: store.RefDeployed}
+	return configrepo.Checkout{Version: v, Repo: store.TraceRepo{Kind: store.RepoConfig, Project: "ops/cfg", Dir: "/w/ops/cfg@" + env,
+		Path: "json-files", Commit: v.Commit, Ref: env, RefSource: store.RefDeployed, Env: env}}, nil
+}
+
+func TestRetraceConfig(t *testing.T) {
+	e := setup(t, analyzer.Fake{})
+	cfg := &fakeConfig{}
+	e.svc.ConfigRepo = cfg
+	ctx := context.Background()
+	// The first trace read dev's config.
+	ts, _ := e.st.GetTraceSession(ctx, e.job)
+	ts.Repos = append(ts.Repos, store.TraceRepo{Kind: store.RepoConfig, Project: "ops/cfg", Dir: "/w/ops/cfg@dev0", Path: "json-files",
+		Commit: "cfg-dev0", Ref: "dev", RefSource: store.RefDeployed, Env: "dev"})
+	if err := e.st.SaveTraceSession(ctx, ts); err != nil {
+		t.Fatal(err)
+	}
+
+	// An environment re-trace reads that environment's config deployed now.
+	if err := e.svc.Retrace(ctx, e.job, e.user, RetraceRequest{Project: "g/svc", Env: "production"}); err != nil {
+		t.Fatal(err)
+	}
+	v := e.wait(t)
+	ct := v.Messages[1].CodeTrace
+	if ct == nil || ct.Config == nil || ct.Config.Commit != "cfg-production" || ct.Config.URL != "https://gitlab/ops/cfg/-/tree/cfg-production/json-files" {
+		t.Fatalf("env retrace config = %+v", ct)
+	}
+	if len(cfg.before) != 1 || !cfg.before[0].IsZero() {
+		t.Fatalf("config looked up before %v", cfg.before)
+	}
+	ts, _ = e.st.GetTraceSession(ctx, e.job)
+	if len(ts.Repos) != 4 || ts.Repos[3].Kind != store.RepoConfig || ts.Repos[3].Env != "production" {
+		t.Fatalf("repos after env retrace = %+v", ts.Repos)
+	}
+
+	// A branch re-trace keeps the latest config of the session.
+	if err := e.svc.Retrace(ctx, e.job, e.user, RetraceRequest{Project: "g/svc", Ref: "main"}); err != nil {
+		t.Fatal(err)
+	}
+	v = e.wait(t)
+	if ct := v.Messages[3].CodeTrace; ct == nil || ct.Config == nil || ct.Config.Commit != "cfg-production" || len(cfg.before) != 1 {
+		t.Fatalf("branch retrace config = %+v", ct)
+	}
+
+	// The config repo is not a re-trace target.
+	if err := e.svc.Retrace(ctx, e.job, e.user, RetraceRequest{Project: "ops/cfg", Env: "dev"}); !errors.Is(err, ErrBadRequest) {
+		t.Fatalf("retrace into config err = %v", err)
+	}
+	if _, err := e.svc.Refs(ctx, e.job, "ops/cfg", ""); !errors.Is(err, ErrBadRequest) {
+		t.Fatalf("refs of config err = %v", err)
+	}
 }

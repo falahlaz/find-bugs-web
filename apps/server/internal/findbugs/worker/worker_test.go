@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/analyzer"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/configrepo"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/gitlab"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/jobs"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/repos"
@@ -528,5 +529,70 @@ func TestCodeTrace(t *testing.T) {
 	e.w.Repos, e.w.Tracer = fakeRepos{}, analyzer.Fake{Err: errors.New("cli down")}
 	if ct := e.w.traceCode(ctx, log, j, logPath, analyzer.Diagnosis{}, []splunk.Event{pod("tdw-dev", "svc")}); ct.Status != store.TraceFailed || !strings.Contains(ct.Reason, "cli down") {
 		t.Fatalf("tracer failure trace = %+v", ct)
+	}
+}
+
+type fakeConfig struct {
+	err    error
+	envs   []string
+	before []time.Time
+}
+
+func (f *fakeConfig) Checkout(_ context.Context, env string, before time.Time) (configrepo.Checkout, error) {
+	f.envs, f.before = append(f.envs, env), append(f.before, before)
+	v := store.ConfigVersion{Project: "ops/cfg", Env: env, Branch: env, Path: "json-files"}
+	if f.err != nil {
+		return configrepo.Checkout{Version: v}, f.err
+	}
+	v.Commit, v.Source = strings.Repeat("c", 40), store.RefDeployed
+	return configrepo.Checkout{Version: v, Repo: store.TraceRepo{Kind: store.RepoConfig, Project: "ops/cfg", Dir: "/r/cfg", Path: "json-files",
+		Commit: v.Commit, Ref: env, RefSource: store.RefDeployed, Env: env}}, nil
+}
+
+func TestCodeTraceConfig(t *testing.T) {
+	e := setup(t, analyzer.Fake{})
+	e.w.Repos, e.w.Tracer = fakeRepos{}, analyzer.Fake{}
+	e.w.Cfg.GitLabURL = "https://gitlab.example.com"
+	e.w.Cfg.EnvMap = map[string]string{"tdw-dev": "dev"}
+	e.w.Cfg.SessionDir = t.TempDir()
+	cfg := &fakeConfig{}
+	e.w.Config = cfg
+	ctx := context.Background()
+	logPath := filepath.Join(t.TempDir(), "job.log")
+	os.WriteFile(logPath, []byte("#1 [t] ERROR boom\n"), 0o600)
+	e.fake.SetLogs("abc-1", "ERROR boom")
+	j := e.submit(t, "abc-1")
+	e.step(t)
+	ev := splunk.Event{Source: "/var/log/pods/tdw-dev_p_u/svc/0.log", Time: "2026-10-05T16:59:24.637+07:00"}
+	log := slog.Default()
+
+	// The config of the error's environment as it was then: in the trace,
+	// and readable in the session; the trace still points at the service.
+	ct := e.w.traceCode(ctx, log, j, logPath, analyzer.Diagnosis{}, []splunk.Event{ev})
+	if ct.Status != store.TraceFound || ct.Project != "grp/svc" || ct.Config == nil || ct.Config.Env != "dev" || ct.Config.Error != "" ||
+		ct.Config.URL != "https://gitlab.example.com/ops/cfg/-/tree/"+strings.Repeat("c", 40)+"/json-files" {
+		t.Fatalf("trace with config = %+v / %+v", ct, ct.Config)
+	}
+	if len(cfg.before) != 1 || !cfg.before[0].Equal(time.Date(2026, 10, 5, 9, 59, 24, 637e6, time.UTC)) {
+		t.Fatalf("config looked up before %v", cfg.before)
+	}
+	ts, err := e.st.GetTraceSession(ctx, j.ID)
+	if err != nil || len(ts.Repos) != 2 || ts.Repos[1].Kind != store.RepoConfig || ts.Repos[1].Path != "json-files" {
+		t.Fatalf("session repos = %+v, %v", ts.Repos, err)
+	}
+
+	// A failed config checkout leaves it out but does not stop the trace.
+	cfg.err = errors.New("vpn down")
+	ct = e.w.traceCode(ctx, log, j, logPath, analyzer.Diagnosis{}, []splunk.Event{ev})
+	if ct.Status != store.TraceFound || ct.Config == nil || !strings.Contains(ct.Config.Error, "vpn down") {
+		t.Fatalf("trace with config error = %+v / %+v", ct, ct.Config)
+	}
+	if ts, _ := e.st.GetTraceSession(ctx, j.ID); len(ts.Repos) != 1 {
+		t.Fatalf("failed config kept in session: %+v", ts.Repos)
+	}
+	// An unmapped namespace cannot say which config ran.
+	ct = e.w.traceCode(ctx, log, j, logPath, analyzer.Diagnosis{}, []splunk.Event{{Source: "/var/log/pods/other_p_u/svc/0.log"}})
+	if ct.Config == nil || !strings.Contains(ct.Config.Error, "other") || len(cfg.envs) != 2 {
+		t.Fatalf("unmapped namespace config = %+v, %v", ct.Config, cfg.envs)
 	}
 }

@@ -122,8 +122,56 @@ export function CodeTraceView({ trace }: { trace: CodeTrace }) {
         <pre className="max-h-96 overflow-auto rounded-lg border bg-muted px-3 py-2.5 font-mono text-[12.5px] leading-relaxed">{trace.snippet}</pre>
       )}
       <Field label="Penjelasan" value={trace.explanation} />
-      <TraceVersion trace={trace} />
+      <div className="grid gap-1.5">
+        <TraceVersion trace={trace} />
+        {trace.config && <ConfigVersionLine config={trace.config} />}
+      </div>
     </div>
+  )
+}
+
+type ConfigVersion = NonNullable<CodeTrace['config']>
+
+/** Which runtime JSON config (ConfigMaps) the trace could read. */
+function ConfigVersionLine({ config }: { config: ConfigVersion }) {
+  if (config.error || !config.commit) {
+    return (
+      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+        <Badge tone="warning">Config server tidak terbaca</Badge>
+        <span className="[overflow-wrap:anywhere]">{config.error}</span>
+      </p>
+    )
+  }
+  const commit = config.url ? (
+    <a href={config.url} target="_blank" rel="noreferrer" className="font-mono text-primary hover:underline">
+      {config.commit.slice(0, 8)}
+    </a>
+  ) : (
+    <span className="font-mono">{config.commit.slice(0, 8)}</span>
+  )
+  const deployed = config.source === 'deployed'
+  return (
+    <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+      <Badge tone={deployed ? 'success' : 'warning'}>
+        {deployed ? 'Config ter-deploy' : 'Config'} · {config.env}
+      </Badge>
+      <span className="[overflow-wrap:anywhere]">
+        {config.project}/{config.path} @ {commit} dari branch <span className="font-mono">{config.branch}</span>
+        {deployed && config.deployedAt && (
+          <>
+            , deploy{' '}
+            {config.deployJobUrl ? (
+              <a href={config.deployJobUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                {formatDateTime(config.deployedAt)}
+              </a>
+            ) : (
+              formatDateTime(config.deployedAt)
+            )}
+          </>
+        )}
+        .{config.note && ` ${config.note}`}
+      </span>
+    </p>
   )
 }
 

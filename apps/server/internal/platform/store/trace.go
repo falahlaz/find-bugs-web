@@ -33,8 +33,13 @@ const (
 	TraceMsgFailed     = "failed"
 )
 
+// RepoConfig marks the TraceRepo of the runtime JSON config repo; service
+// repos have no kind.
+const RepoConfig = "config"
+
 // TraceRepo is a checkout a trace session may read.
 type TraceRepo struct {
+	Kind      string `json:"kind,omitempty"`
 	Container string `json:"container"`
 	Project   string `json:"project"`
 	Dir       string `json:"dir"`
@@ -42,6 +47,9 @@ type TraceRepo struct {
 	Ref       string `json:"ref"`
 	RefSource string `json:"refSource"`
 	Env       string `json:"env,omitempty"`
+	// Path is the directory of a sparse checkout the session reads (the
+	// JSON files of the config repo); "" for the whole checkout.
+	Path string `json:"path,omitempty"`
 }
 
 // TraceSession is the Claude Code conversation of a job's code trace.

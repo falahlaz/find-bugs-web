@@ -67,6 +67,9 @@ func (a *API) writeTrace(w http.ResponseWriter, r *http.Request, id int64, code 
 		out.Envs = []string{}
 	}
 	for _, rp := range v.Repos {
+		if rp.Kind != "" {
+			continue // the runtime config is not a re-trace target
+		}
 		out.Repos = append(out.Repos, TraceRepoView{Project: rp.Project, Commit: rp.Commit, Ref: rp.Ref, RefSource: rp.RefSource, Env: rp.Env})
 	}
 	httpx.JSON(w, code, out)

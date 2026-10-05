@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/analyzer"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/configrepo"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/gitlab"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/redact"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/repos"
@@ -43,6 +44,11 @@ type GitLab interface {
 	Branches(ctx context.Context, project, search string) ([]gitlab.Branch, error)
 }
 
+// ConfigSource is the subset of configrepo.Source used here.
+type ConfigSource interface {
+	Checkout(ctx context.Context, env string, before time.Time) (configrepo.Checkout, error)
+}
+
 // Config tunes the service.
 type Config struct {
 	GitLabURL   string
@@ -66,6 +72,9 @@ type Service struct {
 	Repos  RepoSyncer
 	GitLab GitLab
 	Cfg    Config
+	// ConfigRepo, when set, adds the runtime JSON config of the chosen
+	// environment to a re-trace.
+	ConfigRepo ConfigSource
 	// BaseCtx outlives requests; turns run under it.
 	BaseCtx context.Context
 
@@ -187,7 +196,7 @@ func (s *Service) Retrace(ctx context.Context, jobID, userID int64, req RetraceR
 	}
 	var base *store.TraceRepo
 	for i := range ts.Repos {
-		if ts.Repos[i].Project == req.Project {
+		if ts.Repos[i].Kind == "" && ts.Repos[i].Project == req.Project {
 			base = &ts.Repos[i]
 			break
 		}
@@ -240,6 +249,21 @@ func (s *Service) Retrace(ctx context.Context, jobID, userID int64, req RetraceR
 		ct.Commit = co.Commit
 		target := store.TraceRepo{Container: container, Project: req.Project, Dir: co.Dir, Commit: co.Commit, Ref: ct.Ref, RefSource: store.RefManual, Env: req.Env}
 		all := withRepo(ts.Repos, target)
+		if req.Env != "" && s.ConfigRepo != nil {
+			// The config deployed to that environment now, like the code.
+			progress("Mengambil config " + req.Env + " dari GitLab")
+			cc, err := s.ConfigRepo.Checkout(ctx, req.Env, time.Time{})
+			v := cc.Version
+			if err != nil {
+				v.Error = "Gagal mengambil config dari GitLab: " + redact.Sensitive(err.Error())
+			} else {
+				v.SetURL(s.Cfg.GitLabURL)
+				all = withRepo(all, cc.Repo)
+			}
+			ct.Config = &v
+		} else {
+			ct.Config = lastConfig(ts.Repos, s.Cfg.GitLabURL)
+		}
 		recap := ""
 		if ts.Restart {
 			recap = s.recap(ctx, jobID)
@@ -348,6 +372,9 @@ func session(ts store.TraceSession) analyzer.Session {
 }
 
 func analyzerRepo(r store.TraceRepo) analyzer.Repo {
+	if r.Kind == store.RepoConfig {
+		return configrepo.Repo(r)
+	}
 	return analyzer.Repo{Project: r.Project, Dir: r.Dir, Commit: r.Commit, Ref: r.Ref, Env: r.Env}
 }
 
@@ -357,6 +384,19 @@ func analyzerRepos(rs []store.TraceRepo) []analyzer.Repo {
 		out[i] = analyzerRepo(r)
 	}
 	return out
+}
+
+// lastConfig describes the most recent config checkout of a session, which
+// a re-trace on a branch keeps reading; nil when there is none.
+func lastConfig(rs []store.TraceRepo, gitlabURL string) *store.ConfigVersion {
+	for i := len(rs) - 1; i >= 0; i-- {
+		if r := rs[i]; r.Kind == store.RepoConfig {
+			v := &store.ConfigVersion{Project: r.Project, Env: r.Env, Branch: r.Ref, Path: r.Path, Commit: r.Commit, Source: r.RefSource}
+			v.SetURL(gitlabURL)
+			return v
+		}
+	}
+	return nil
 }
 
 // withRepo adds r to rs unless its checkout is already there.
@@ -454,7 +494,7 @@ func (s *Service) Refs(ctx context.Context, jobID int64, project, search string)
 	}
 	known := false
 	for _, r := range ts.Repos {
-		known = known || r.Project == project
+		known = known || (r.Kind == "" && r.Project == project)
 	}
 	if !known {
 		return Refs{}, fmt.Errorf("%w: project %q tidak ada di sesi ini", ErrBadRequest, project)

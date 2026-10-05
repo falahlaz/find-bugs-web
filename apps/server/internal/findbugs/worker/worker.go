@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/analyzer"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/configrepo"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/gitlab"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/redact"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/repos"
@@ -76,6 +77,11 @@ type Deployments interface {
 	DeployedCommit(ctx context.Context, project, env string, before time.Time) (gitlab.Deployment, error)
 }
 
+// ConfigSource is the subset of configrepo.Source used by the worker.
+type ConfigSource interface {
+	Checkout(ctx context.Context, env string, before time.Time) (configrepo.Checkout, error)
+}
+
 // Worker processes jobs.
 type Worker struct {
 	Store    *store.Store
@@ -90,6 +96,9 @@ type Worker struct {
 	// Deploys, when set, picks the commit deployed where the error happened
 	// instead of the default branch.
 	Deploys Deployments
+	// Config, when set, adds the runtime JSON config of the error's
+	// environment to a trace.
+	Config ConfigSource
 
 	wake chan struct{}
 }
@@ -332,6 +341,10 @@ func (w *Worker) traceCode(ctx context.Context, log *slog.Logger, job store.Job,
 	if len(rs) == 0 {
 		return &store.CodeTrace{Status: store.TraceFailed, Reason: "Gagal mengambil repo dari GitLab (cek VPN dan token): " + redact.Sensitive(strings.Join(errs, "; "))}
 	}
+	cfgRepo, cfgVersion := w.configCheckout(ctx, log, targets[0])
+	if cfgRepo != nil {
+		rs = append(rs, configrepo.Repo(*cfgRepo))
+	}
 	log.Info("tracing code", "repos", len(rs))
 	sess := analyzer.Session{ID: analyzer.NewSessionID(), Dir: filepath.Join(w.Cfg.SessionDir, fmt.Sprintf("job-%d", job.ID))}
 	if err := analyzer.PrepareSession(sess.Dir, logPath); err != nil {
@@ -353,17 +366,45 @@ func (w *Worker) traceCode(ctx context.Context, log *slog.Logger, job store.Job,
 	if co, ok := checkouts[t.Project]; ok {
 		co.Fill(ct, w.Cfg.GitLabURL)
 	}
+	ct.Config = cfgVersion
 	// Keep the session so engineers can ask about the trace.
 	ts := store.TraceSession{JobID: job.ID, SessionID: sess.ID, Dir: sess.Dir}
 	for _, co := range checkouts {
 		ts.Repos = append(ts.Repos, co.TraceRepo())
 	}
 	sort.Slice(ts.Repos, func(i, j int) bool { return ts.Repos[i].Project < ts.Repos[j].Project })
+	if cfgRepo != nil {
+		ts.Repos = append(ts.Repos, *cfgRepo)
+	}
 	if err := w.Store.SaveTraceSession(context.WithoutCancel(ctx), ts); err != nil {
 		log.Warn("save trace session", "err", err)
 	}
 	log.Info("code traced", "status", ct.Status, "project", ct.Project, "file", ct.File, "line", ct.Line, "ref", ct.Ref, "ref_source", ct.RefSource)
 	return ct
+}
+
+// configCheckout checks out the runtime JSON config of the target's
+// environment as it was when the error happened. It returns no repo when
+// that is off or fails; the version then says why, and the trace goes on
+// without it.
+func (w *Worker) configCheckout(ctx context.Context, log *slog.Logger, tg repos.Target) (*store.TraceRepo, *store.ConfigVersion) {
+	if w.Config == nil {
+		return nil, nil
+	}
+	env := w.Cfg.EnvMap[tg.Namespace]
+	if env == "" {
+		return nil, &store.ConfigVersion{Error: fmt.Sprintf("Namespace %q belum dipetakan ke environment (GITLAB_ENV_MAP), jadi config server tidak bisa dicek.", tg.Namespace)}
+	}
+	co, err := w.Config.Checkout(ctx, env, tg.LastSeen)
+	v := co.Version
+	if err != nil {
+		log.Warn("config checkout failed", "env", env, "err", err)
+		v.Error = "Gagal mengambil config dari GitLab: " + redact.Sensitive(err.Error())
+		return nil, &v
+	}
+	v.SetURL(w.Cfg.GitLabURL)
+	log.Info("config checked out", "env", env, "branch", v.Branch, "commit", short(v.Commit), "source", v.Source)
+	return &co.Repo, &v
 }
 
 // Checkout is a synced repo plus how its version was chosen.
