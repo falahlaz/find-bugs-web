@@ -1,9 +1,14 @@
 # ~/.cloudflared/config.yml — Cloudflare Tunnel to the local server.
 # cloudflared tunnel create findbugs
 # cloudflared tunnel route dns findbugs findbugs.arunoir.space
+# cloudflared tunnel route dns findbugs ssh.arunoir.space
 tunnel: findbugs
 credentials-file: /home/<user>/.cloudflared/<tunnel-id>.json
 ingress:
   - hostname: findbugs.arunoir.space
     service: http://127.0.0.1:8080
+  # SSH through the tunnel, so it still works while GlobalProtect owns the
+  # default route. Client: ProxyCommand cloudflared access ssh --hostname %h
+  - hostname: ssh.arunoir.space
+    service: ssh://localhost:22
   - service: http_status:404

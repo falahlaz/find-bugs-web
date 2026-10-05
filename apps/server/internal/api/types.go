@@ -233,3 +233,51 @@ type TraceBranch struct {
 	Name   string `json:"name"`
 	Commit string `json:"commit"`
 }
+
+// ReposResponse lists the repos under GITLAB_REPOS_DIR.
+type ReposResponse struct {
+	Repos        []RepoView      `json:"repos"`
+	Clones       []RepoCloneView `json:"clones" doc:"Clones running or failed since the server started"`
+	DefaultGroup string          `json:"defaultGroup" doc:"Group of a project given without one"`
+	CanClone     bool            `json:"canClone" doc:"GitLab URL and token are set"`
+	CanSession   bool            `json:"canSession" doc:"The rc-session script is installed"`
+}
+
+// RepoView is a repo and its Remote Control session, if any.
+type RepoView struct {
+	Project     string           `json:"project"`
+	Branch      string           `json:"branch,omitempty" doc:"Empty when HEAD is detached (a tracer store)"`
+	Commit      string           `json:"commit,omitempty"`
+	Subject     string           `json:"subject,omitempty"`
+	CommittedAt *time.Time       `json:"committedAt,omitempty"`
+	Shallow     bool             `json:"shallow"`
+	Session     *RepoSessionView `json:"session,omitempty"`
+}
+
+// RepoSessionView is a running `claude rc` session.
+type RepoSessionView struct {
+	Name  string    `json:"name" doc:"tmux session name"`
+	URL   string    `json:"url,omitempty" doc:"claude.ai link once connected"`
+	Since time.Time `json:"since"`
+}
+
+// RepoCloneView is a clone in progress or one that failed.
+type RepoCloneView struct {
+	Project   string    `json:"project"`
+	State     string    `json:"state" enum:"cloning,failed"`
+	Error     string    `json:"error,omitempty"`
+	By        string    `json:"by"`
+	StartedAt time.Time `json:"startedAt"`
+}
+
+// RepoRequest names a project: group/project, or a bare name in the
+// default group.
+type RepoRequest struct {
+	Project string `json:"project"`
+}
+
+// RepoSessionResponse is a repo after starting or stopping its session.
+type RepoSessionResponse struct {
+	Repo   RepoView `json:"repo"`
+	Output string   `json:"output" doc:"What the rc-session script reported"`
+}

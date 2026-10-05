@@ -14,6 +14,9 @@ const actionLabel: Record<string, string> = {
   'user.create': 'Tambah user',
   'user.update': 'Ubah user',
   'user.passwd': 'Reset password (CLI)',
+  'repo.clone': 'Clone repo',
+  'repo.session_start': 'Mulai sesi rc',
+  'repo.session_stop': 'Stop sesi rc',
 }
 
 function resultTone(r: string) {

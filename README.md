@@ -57,6 +57,7 @@ Spec juga tersedia di `GET /api/openapi.json`. Jalankan `make openapi` setiap ka
 - **Analyzer** (`internal/findbugs/analyzer`): semua event hasil search (maks `MAX_LOG_LINES`, urut lama → baru) ditulis ke `data/logs/job-<id>.log` (0600, dihapus setelah `RETENTION_RAW_LOG_DAYS`). `claude -p` dijalankan di direktori sementara yang hanya berisi salinan file itu sebagai `logs.txt`, dengan tool `Read`/`Grep`/`Glob` saja dan `--permission-mode dontAsk`, jadi akses di luar direktori itu ditolak. Tanpa MCP/settings, prompt lewat stdin. Log sudah diredaksi sebelum ditulis, dikirim, atau ditampilkan.
 - **Code trace** (`internal/findbugs/repos`, `gitlab`, `analyzer/trace.go`, `tracechat`, opsional): kalau diagnosis `error_source = internal`, worker mengambil container dan namespace Kubernetes dari field `source` Splunk (`/var/log/pods/<ns>_<pod>_<uid>/<container>/0.log`). Container dipetakan ke project GitLab `GITLAB_GROUP/<container>` (atau `GITLAB_REPO_MAP`). Namespace dipetakan ke environment GitLab lewat `GITLAB_ENV_MAP` (default `tdw-dev→dev`, `tdw-staging→staging`, `tdw-preprod→preprod`, `blue→blue`, `tdw-webapi→production`), lalu commit yang dipakai adalah job `deploy-eks:<env>` sukses terakhir **sebelum waktu error** (GitLab Deployments API). Kalau namespace tidak dikenal, deployment tidak ketemu, atau GitLab error, trace jatuh ke branch `GITLAB_REF` dan UI menyebut alasannya. Tiap commit di-checkout sebagai git worktree sendiri di `GITLAB_REPOS_DIR/.worktrees/<group>/<project>@<sha>` (object store shallow per project di `GITLAB_REPOS_DIR/<group>/<project>`), jadi checkout tidak berubah selama dibaca. Token dan setting TLS dikirim lewat env proses git (`GIT_CONFIG_*`) dan header API, tidak pernah tersimpan di `.git/config`, URL remote, atau argumen proses. Lalu `claude -p` (model `CODE_TRACE_MODEL`, default Opus) dijalankan dalam **sesi yang disimpan** (`--session-id`, folder kerja `data/trace-sessions/job-<id>`) dengan `--add-dir` ke checkout (tetap `Read`/`Grep`/`Glob` saja) untuk menunjuk file:line, potongan kode, dan penjelasan. Gagal clone atau trace tidak menggagalkan job. Butuh VPN; matikan dengan `CODE_TRACE_ENABLED=false`.
   - **Chat dan trace ulang** (engineer saja, satu sesi per job): di kartu trace, engineer bisa bertanya lanjutan (`claude -p --resume`, progres tool tampil saat menjawab) atau klik **Cek versi lain** untuk trace ulang di commit yang sedang ter-deploy di environment lain, atau di branch/tag/commit apa pun; tiap versi tampil sebagai tab. Tiap pesan adalah proses CLI singkat, jadi sesi yang diam tidak memakai RAM/CPU. Sesi tampil tertutup setelah `TRACE_SESSION_IDLE` (10m) tanpa pesan atau lewat tombol **Tutup sesi**, dan bisa dibuka lagi dengan konteks utuh. File sesi Claude dihapus setelah `TRACE_SESSION_RETENTION_DAYS` (30) tidak aktif; membukanya lagi memulai sesi baru dengan ringkasan percakapan. Maksimal `TRACE_CHAT_CONCURRENCY` (2) jawaban berjalan bersamaan. Worktree yang tidak dipakai sesi mana pun dihapus setelah `GITLAB_WORKTREE_TTL_DAYS` (14).
+- **Repo** (`/repos`, engineer saja): daftar repo di `GITLAB_REPOS_DIR` (branch, commit terakhir, shallow atau tidak). **Clone** membuat full clone branch default di `<dir>/<group>/<project>` di belakang layar (token lewat env proses git, sama seperti trace); trace yang nanti memakai repo itu tidak membuatnya shallow. **Mulai sesi** menjalankan script skill `rc-session` (`RC_SESSION_SCRIPT`) untuk `claude rc` di tmux dan menampilkan link claude.ai; **Stop** mematikan sesi tmux-nya. Script dijalankan dengan env minimal (tanpa token dari `findbugs.env`) di systemd user scope sendiri, jadi sesi tetap hidup saat service di-restart. Semua aksi masuk audit log.
 - **Notifikasi**: banner di web, plus pesan satu arah ke grup Telegram (opsional).
 
 ## Deploy (VM Debian/Ubuntu)
@@ -102,6 +103,15 @@ Semua langkah dijalankan sebagai user Linux pemilik sesi GlobalProtect (bukan ro
    ```
 
 6. **Cloudflare Tunnel** ke `127.0.0.1:8080` (lihat `deploy/cloudflared-config.example.yml`). Disarankan pasang Cloudflare Access di depan subdomain. Server hanya listen di loopback.
+
+   SSH juga lewat tunnel (`ssh.arunoir.space → ssh://localhost:22`). Saat VPN aktif, default route pindah ke `gpd0`, jadi balasan SSH ke IP publik keluar lewat VPN dan koneksinya putus. SSH lewat tunnel tetap jalan. Di laptop, install `cloudflared`, lalu tambah ini ke `~/.ssh/config`:
+
+   ```
+   Host findbugs
+     HostName ssh.arunoir.space
+     User <user>
+     ProxyCommand cloudflared access ssh --hostname %h
+   ```
 
 ### Recovery manual
 
