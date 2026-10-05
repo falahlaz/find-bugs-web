@@ -49,7 +49,7 @@ export function TraceSection({ jobId, initial }: { jobId: number; initial: CodeT
   const current = versions.find((v) => v.key === selected) ?? versions[versions.length - 1]
 
   return (
-    <div className="grid gap-5">
+    <div className="grid grid-cols-1 gap-5">
       {versions.length > 1 && (
         <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Versi kode">
           {versions.map((v) => (
@@ -183,7 +183,7 @@ function TraceChat({ jobId, session, onShowTrace }: { jobId: number; session: Tr
   }
 
   return (
-    <div className="grid gap-3 border-t pt-4">
+    <div className="grid grid-cols-1 gap-3 border-t pt-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 text-sm font-medium">
           <MessageSquare className="size-4 text-primary" aria-hidden />
@@ -196,7 +196,7 @@ function TraceChat({ jobId, session, onShowTrace }: { jobId: number; session: Tr
         </Button>
       </div>
       {session.messages.length > 0 && (
-        <ol className="grid gap-3">
+        <ol className="grid grid-cols-1 gap-3">
           {session.messages.map((m) => (
             <li key={m.id}>
               <ChatMessage m={m} onShowTrace={onShowTrace} />
@@ -255,7 +255,7 @@ function ChatMessage({ m, onShowTrace }: { m: TraceMessage; onShowTrace: (key: s
         <div className="text-xs text-muted-foreground">
           {m.username || 'engineer'} · {formatDateTime(m.createdAt)}
         </div>
-        <div className="break-words whitespace-pre-wrap">{m.content}</div>
+        <div className="whitespace-pre-wrap [overflow-wrap:anywhere]">{m.content}</div>
       </div>
     )
   }
@@ -280,7 +280,11 @@ function ChatMessage({ m, onShowTrace }: { m: TraceMessage; onShowTrace: (key: s
     )
   }
   if (m.status === 'failed') {
-    return <Alert tone="warning">{m.error || 'Gagal menjawab.'}</Alert>
+    return (
+      <Alert tone="warning" className="[overflow-wrap:anywhere]">
+        {m.error || 'Gagal menjawab.'}
+      </Alert>
+    )
   }
   if (m.kind === 'retrace' && m.codeTrace) {
     const t = m.codeTrace
@@ -297,7 +301,7 @@ function ChatMessage({ m, onShowTrace }: { m: TraceMessage; onShowTrace: (key: s
     )
   }
   return (
-    <div className="grid max-w-[92%] gap-1 rounded-lg border px-3 py-2 text-sm">
+    <div className="grid max-w-[92%] min-w-0 grid-cols-1 gap-1 rounded-lg border px-3 py-2 text-sm">
       <Markdown text={m.content} />
       {m.model && <div className="text-[11px] text-muted-foreground">{m.model}</div>}
     </div>
@@ -311,7 +315,7 @@ function ChatMessage({ m, onShowTrace }: { m: TraceMessage; onShowTrace: (key: s
 function Markdown({ text }: { text: string }) {
   const parts = text.split(/^```[^\n]*\n?/m)
   return (
-    <div className="grid gap-2">
+    <div className="grid grid-cols-1 gap-2">
       {parts.map((part, i) =>
         i % 2 === 1 ? (
           <pre key={i} className="overflow-auto rounded-md bg-muted px-3 py-2 font-mono text-[12.5px] leading-relaxed">
@@ -322,7 +326,7 @@ function Markdown({ text }: { text: string }) {
             .split(/\n{2,}/)
             .filter((p) => p.trim() !== '')
             .map((p, j) => (
-              <p key={`${i}-${j}`} className="break-words whitespace-pre-wrap">
+              <p key={`${i}-${j}`} className="whitespace-pre-wrap [overflow-wrap:anywhere]">
                 {inline(p.trim())}
               </p>
             ))
