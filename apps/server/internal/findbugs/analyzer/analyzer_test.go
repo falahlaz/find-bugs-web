@@ -120,6 +120,17 @@ func TestClaudeCodeTrace(t *testing.T) {
 	if _, err := c.Trace(ctx, sess, "abc-1", Diagnosis{}, nil, nil); err == nil {
 		t.Error("Trace without repos should fail")
 	}
+	cfg := Repo{Project: "ops/cfg", Dir: t.TempDir(), Commit: "c1", Ref: "dev", Env: "dev", Config: true, Deployed: true}
+	if _, err := c.Trace(ctx, sess, "abc-1", Diagnosis{}, []Repo{cfg}, nil); err == nil {
+		t.Error("Trace with only the config repo should fail")
+	}
+	progress = nil
+	if tr, err := c.Trace(ctx, sess, "abc-1", Diagnosis{Summary: "s"}, []Repo{repos[0], cfg}, onProgress); err != nil || tr.Status != "found" || tr.Project != "grp/svc" {
+		t.Fatalf("Trace with config = %+v, %v", tr, err)
+	}
+	if !strings.Contains(strings.Join(progress, "|"), "Membaca config dev/generalConfig.json") {
+		t.Fatalf("progress with config = %q", progress)
+	}
 
 	// Follow-ups resume the session.
 	sess.Resume = true
@@ -161,6 +172,23 @@ func TestTraceArgsAndPrompts(t *testing.T) {
 	}
 	if p := RetracePrompt(repos[1], "recap", repos); !strings.HasPrefix(p, "This conversation was restarted") || !strings.Contains(p, `set "project" to g/b`) {
 		t.Errorf("retrace prompt:\n%s", p)
+	}
+	if !strings.Contains(p, "Runtime JSON config: not available") {
+		t.Errorf("trace prompt without config:\n%s", p)
+	}
+	cfg := Repo{Project: "ops/cfg", Dir: "/w/cfg@1/json-files", Commit: "c1", Ref: "dev", Env: "dev", Config: true, Deployed: true}
+	withCfg := append(repos[:2:2], cfg)
+	p = TracePrompt("T1", Diagnosis{Summary: "s"}, withCfg)
+	if !strings.Contains(p, "Runtime JSON config (GitLab project → directory of its JSON files, version):\n- ops/cfg → /w/cfg@1/json-files (branch dev at commit c1, the config deployed to the dev ConfigMaps)") ||
+		strings.Contains(p, "not available") || strings.Index(p, "g/b → ") > strings.Index(p, "Runtime JSON config") {
+		t.Errorf("trace prompt with config:\n%s", p)
+	}
+	cfg.Deployed = false
+	if p := AskPrompt("q?", "", []Repo{repos[0], cfg}); !strings.Contains(p, "the last config commit before the error; its deployment to dev could not be confirmed") {
+		t.Errorf("ask prompt with fallback config:\n%s", p)
+	}
+	if !strings.Contains(TraceSystemPrompt, "for local development only") {
+		t.Error("system prompt does not explain the runtime config")
 	}
 	if strings.Contains(TraceSystemPrompt, "single JSON object only") {
 		t.Error("the session-wide system prompt must not force JSON answers")

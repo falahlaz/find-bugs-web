@@ -545,6 +545,7 @@ export interface components {
         };
         CodeTrace: {
             commit?: string;
+            config?: components["schemas"]["ConfigVersion"] | null;
             deployJobUrl?: string;
             deployedAt?: string;
             env?: string;
@@ -561,6 +562,19 @@ export interface components {
             refSource?: string;
             snippet?: string;
             status: string;
+            url?: string;
+        };
+        ConfigVersion: {
+            branch?: string;
+            commit?: string;
+            deployJobUrl?: string;
+            deployedAt?: string;
+            env?: string;
+            error?: string;
+            note?: string;
+            path?: string;
+            project: string;
+            source?: string;
             url?: string;
         };
         CreateUserRequest: {

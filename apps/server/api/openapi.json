@@ -146,6 +146,14 @@
           "commit": {
             "type": "string"
           },
+          "config": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ConfigVersion"
+              }
+            ],
+            "nullable": true
+          },
           "deployJobUrl": {
             "type": "string"
           },
@@ -198,6 +206,47 @@
         },
         "required": [
           "status"
+        ],
+        "type": "object"
+      },
+      "ConfigVersion": {
+        "properties": {
+          "branch": {
+            "type": "string"
+          },
+          "commit": {
+            "type": "string"
+          },
+          "deployJobUrl": {
+            "type": "string"
+          },
+          "deployedAt": {
+            "type": "string"
+          },
+          "env": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          },
+          "path": {
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          },
+          "source": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
         ],
         "type": "object"
       },

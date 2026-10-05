@@ -92,3 +92,41 @@ func TestResolveRefAndBranches(t *testing.T) {
 		t.Fatalf("Branches = %+v, %v", bs, err)
 	}
 }
+
+func TestBranchDeployment(t *testing.T) {
+	var queries []string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.EscapedPath() != "/api/v4/projects/grp%2Fcfg/deployments" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		queries = append(queries, r.URL.RawQuery)
+		// Newest first: a consumer redeploy and another branch's configmap
+		// deploy come before the one asked for.
+		fmt.Fprint(w, `[
+			{"ref":"dev","sha":"redeploy","environment":{"name":"dev"},"deployable":{"name":"auto_redeploy_nonprod"}},
+			{"ref":"staging","sha":"other","environment":{"name":"staging"},"deployable":{"name":"deploy_configmaps_nonprod"}},
+			{"ref":"dev","sha":"ba0a8a5cdc92b94fb3d802864f12c766d69a3d52","environment":{"name":"dev"},"deployable":{"name":"deploy_configmaps_nonprod","web_url":"https://g/jobs/2","finished_at":"2026-10-05T16:54:46.879+07:00"}}
+		]`)
+	}))
+	defer srv.Close()
+	c, err := New(Config{URL: srv.URL, Token: "tok"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	before := time.Date(2026, 10, 5, 9, 59, 24, 0, time.UTC)
+	d, err := c.BranchDeployment(ctx, "grp/cfg", "dev", "deploy_configmaps", before)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if d.SHA != "ba0a8a5cdc92b94fb3d802864f12c766d69a3d52" || d.Environment != "dev" || d.JobURL != "https://g/jobs/2" || d.FinishedAt.IsZero() {
+		t.Fatalf("deployment = %+v", d)
+	}
+	if len(queries) != 1 || strings.Contains(queries[0], "environment=") || !strings.Contains(queries[0], "finished_before=2026-10-05T09%3A59%3A24Z") {
+		t.Fatalf("queries = %v", queries)
+	}
+	if _, err := c.BranchDeployment(ctx, "grp/cfg", "preprod", "deploy_configmaps", time.Time{}); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("no deployment err = %v", err)
+	}
+}

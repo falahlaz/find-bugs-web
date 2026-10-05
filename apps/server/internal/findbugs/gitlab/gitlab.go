@@ -126,6 +126,46 @@ func (c *Client) DeployedCommit(ctx context.Context, project, env string, before
 	return Deployment{}, fmt.Errorf("no successful %s%s deployment of %s: %w", DeployJobPrefix, env, project, ErrNotFound)
 }
 
+// BranchDeployment returns the last successful deployment of ref (a
+// branch) by a job whose name starts with jobPrefix that finished before
+// before (or the latest one if before is zero), whatever environment it
+// went to. It suits projects whose environments do not match their
+// branches, like the JSON config repo (production's branch deploys to the
+// "json" environment).
+func (c *Client) BranchDeployment(ctx context.Context, project, ref, jobPrefix string, before time.Time) (Deployment, error) {
+	q := url.Values{"status": {"success"}, "order_by": {"finished_at"}, "sort": {"desc"}, "per_page": {"100"}}
+	if !before.IsZero() {
+		q.Set("finished_before", before.UTC().Format(time.RFC3339))
+	}
+	for page := 1; page <= deploymentPages; page++ {
+		q.Set("page", fmt.Sprint(page))
+		var ds []struct {
+			Ref         string `json:"ref"`
+			SHA         string `json:"sha"`
+			Environment struct {
+				Name string `json:"name"`
+			} `json:"environment"`
+			Deployable struct {
+				Name       string    `json:"name"`
+				WebURL     string    `json:"web_url"`
+				FinishedAt time.Time `json:"finished_at"`
+			} `json:"deployable"`
+		}
+		if err := c.get(ctx, "/projects/"+url.PathEscape(project)+"/deployments", q, &ds); err != nil {
+			return Deployment{}, err
+		}
+		for _, d := range ds {
+			if d.Ref == ref && strings.HasPrefix(d.Deployable.Name, jobPrefix) && d.SHA != "" {
+				return Deployment{Environment: d.Environment.Name, Ref: d.Ref, SHA: d.SHA, FinishedAt: d.Deployable.FinishedAt, JobURL: d.Deployable.WebURL}, nil
+			}
+		}
+		if len(ds) < 100 {
+			break
+		}
+	}
+	return Deployment{}, fmt.Errorf("no successful %s* deployment of %s branch %s: %w", jobPrefix, project, ref, ErrNotFound)
+}
+
 // ResolveRef returns the commit SHA a branch, tag or commit names.
 func (c *Client) ResolveRef(ctx context.Context, project, ref string) (string, error) {
 	var out struct {
