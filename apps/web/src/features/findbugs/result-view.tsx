@@ -21,7 +21,7 @@ function Field({ label, value, mono = false, className }: { label: string; value
   return (
     <div className={cn('grid gap-1', className)}>
       <FieldLabel>{label}</FieldLabel>
-      <div className={cn('text-sm break-words whitespace-pre-wrap', mono && 'font-mono text-[13px]')}>{value}</div>
+      <div className={cn('text-sm whitespace-pre-wrap [overflow-wrap:anywhere]', mono && 'font-mono text-[13px]')}>{value}</div>
     </div>
   )
 }
@@ -100,7 +100,7 @@ export function CodeTraceView({ trace }: { trace: CodeTrace }) {
   }
   const location = trace.file ? `${trace.file}${trace.line ? `:${trace.line}` : ''}` : ''
   return (
-    <div className="grid gap-4">
+    <div className="grid grid-cols-1 gap-4">
       {trace.status === 'not_found' && <Alert tone="neutral">AI tidak menemukan lokasi kode yang cocok dengan yakin.</Alert>}
       {location && (
         <div className="grid gap-1">
