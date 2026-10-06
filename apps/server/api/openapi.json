@@ -383,6 +383,9 @@
             "nullable": true,
             "type": "string"
           },
+          "sprintIdentifier": {
+            "type": "string"
+          },
           "startedAt": {
             "format": "date-time",
             "nullable": true,
@@ -505,6 +508,9 @@
           "searchDoneAt": {
             "format": "date-time",
             "nullable": true,
+            "type": "string"
+          },
+          "sprintIdentifier": {
             "type": "string"
           },
           "startedAt": {
@@ -858,6 +864,12 @@
           "model": {
             "type": "string"
           },
+          "pods": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
           "qaMessage": {
             "type": "string"
           },
@@ -880,6 +892,9 @@
             "type": "string"
           },
           "sourceLabel": {
+            "type": "string"
+          },
+          "sprintIdentifier": {
             "type": "string"
           },
           "suggestedAction": {

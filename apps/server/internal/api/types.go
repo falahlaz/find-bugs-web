@@ -66,7 +66,11 @@ type Result struct {
 	LLMFailed   bool   `json:"llmFailed"`
 	// LinkedIDs are backend IDs the service logged this transaction under;
 	// their logs were included in the analysis.
-	LinkedIDs       []string `json:"linkedIds,omitempty"`
+	LinkedIDs []string `json:"linkedIds,omitempty"`
+	// SprintIdentifier is the X-SPRINT-IDENTIFIER header of the pasted curl.
+	SprintIdentifier string `json:"sprintIdentifier,omitempty"`
+	// Pods are the pods (<namespace>_<pod>) that logged the transaction.
+	Pods            []string `json:"pods,omitempty"`
 	ErrorType       string   `json:"errorType,omitempty"`
 	FailedComponent string   `json:"failedComponent,omitempty"`
 	LikelyCause     string   `json:"likelyCause,omitempty"`

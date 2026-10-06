@@ -278,7 +278,7 @@ func (w *Worker) run(parent context.Context, job store.Job) {
 	// analyzer reads every fetched event from the job's log file.
 	w.set(parent, job.ID, store.Transition{Status: store.StatusAnalyzing, Stamp: "search_done_at"})
 	logs := redact.Logs(res.Logs, 0)
-	inv := store.Investigation{JobID: job.ID, RawLogSnippet: redact.Tail(logs, RawSnippetChars), RelevantLogs: []string{}, LinkedIDs: linked}
+	inv := store.Investigation{JobID: job.ID, RawLogSnippet: redact.Tail(logs, RawSnippetChars), RelevantLogs: []string{}, LinkedIDs: linked, Pods: repos.Pods(res.Events)}
 	log.Info("logs fetched", "events", len(res.Events), "matched", res.EventCount, "truncated", res.Truncated, "linked_ids", linked)
 	var d analyzer.Diagnosis
 	path, aerr := writeLogFile(w.Cfg.LogDir, job, res, linked)

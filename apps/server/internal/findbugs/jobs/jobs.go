@@ -81,7 +81,7 @@ func (s *Service) Submit(ctx context.Context, u store.User, req SubmitRequest) (
 	}
 	job, err = s.Store.EnqueueJob(ctx, store.NewJob{
 		UserID: u.ID, TransactionID: parsed.TransactionID, Environment: req.Environment,
-		TimeRange: req.TimeRange, InputKind: parsed.Kind,
+		TimeRange: req.TimeRange, InputKind: parsed.Kind, SprintIdentifier: parsed.SprintIdentifier,
 	}, s.Limits)
 	switch {
 	case errors.Is(err, store.ErrUserLimited):

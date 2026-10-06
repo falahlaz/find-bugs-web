@@ -32,6 +32,12 @@ func TestContainer(t *testing.T) {
 	if got := strings.Join(Containers(evs), ","); got != "b,c,a" {
 		t.Errorf("Containers = %s", got)
 	}
+	if got := strings.Join(Pods(evs), ","); got != "n_p,m_p" {
+		t.Errorf("Pods = %s", got)
+	}
+	if got := Pod("/var/log/pods/tdw-dev_service-payment-migration-7ddc5f696f-wm28t_0d6a3e66-c806-4566-9095-5847d09c0f1d/service-payment-migration/0.log"); got != "tdw-dev_service-payment-migration-7ddc5f696f-wm28t" {
+		t.Errorf("Pod = %q", got)
+	}
 	ts := Targets(evs)
 	if ts[0].Namespace != "n" || !ts[0].LastSeen.Equal(time.Date(2026, 10, 2, 10, 41, 30, 0, time.UTC)) || ts[1].Namespace != "n" || !ts[2].LastSeen.IsZero() {
 		t.Errorf("Targets = %+v", ts)

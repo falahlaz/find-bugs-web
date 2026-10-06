@@ -617,6 +617,7 @@ export interface components {
             queuedAt: string;
             /** Format: date-time */
             searchDoneAt?: string | null;
+            sprintIdentifier?: string;
             /** Format: date-time */
             startedAt?: string | null;
             /** @enum {string} */
@@ -655,6 +656,7 @@ export interface components {
             result?: components["schemas"]["Result"] | null;
             /** Format: date-time */
             searchDoneAt?: string | null;
+            sprintIdentifier?: string;
             /** Format: date-time */
             startedAt?: string | null;
             /** @enum {string} */
@@ -753,12 +755,14 @@ export interface components {
             linkedIds?: string[];
             llmFailed: boolean;
             model?: string;
+            pods?: string[];
             qaMessage?: string;
             rawLogSnippet?: string;
             relevantLogs?: string[];
             /** @enum {string} */
             severity?: "low" | "medium" | "high" | "critical";
             sourceLabel?: string;
+            sprintIdentifier?: string;
             suggestedAction?: string;
             summary?: string;
         };

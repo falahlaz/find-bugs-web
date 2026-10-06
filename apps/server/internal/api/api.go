@@ -432,15 +432,16 @@ func (a *API) jobView(ctx context.Context, u store.User, j store.Job) (JobView, 
 	if err != nil {
 		return v, err
 	}
-	v.Result = shapeResult(u, inv)
+	v.Result = shapeResult(u, j, inv)
 	return v, nil
 }
 
 // shapeResult mirrors find-bugs-bot bot/formatter.py: QA gets the summary,
 // severity and a message based on the error source; engineers get everything.
-func shapeResult(u store.User, inv store.Investigation) *Result {
+func shapeResult(u store.User, j store.Job, inv store.Investigation) *Result {
 	label, msg := sourceText(inv.ErrorSource)
-	res := &Result{Summary: inv.Summary, Severity: inv.Severity, ErrorSource: inv.ErrorSource, SourceLabel: label, QAMessage: msg, LLMFailed: inv.LLMFailed, LinkedIDs: inv.LinkedIDs}
+	res := &Result{Summary: inv.Summary, Severity: inv.Severity, ErrorSource: inv.ErrorSource, SourceLabel: label, QAMessage: msg, LLMFailed: inv.LLMFailed, LinkedIDs: inv.LinkedIDs,
+		SprintIdentifier: j.SprintIdentifier, Pods: inv.Pods}
 	if inv.LLMFailed {
 		res.QAMessage = "Tim engineering sedang meninjau log secara manual dan akan menindaklanjuti."
 	}
