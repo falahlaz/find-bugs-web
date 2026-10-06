@@ -27,11 +27,12 @@ function Field({ label, value, mono = false, className }: { label: string; value
   )
 }
 
-function Chips({ label, values }: { label: string; values: string[] }) {
+function Chips({ label, values, children }: { label: string; values: string[]; children?: ReactNode }) {
   return (
     <div className="grid animate-rise gap-1.5">
       <FieldLabel>{label}</FieldLabel>
-      <div className="flex flex-wrap gap-1.5">
+      {children}
+      <div className="flex flex-wrap gap-1.5 empty:hidden">
         {values.map((v) => (
           <code key={v} className="rounded-md border bg-muted px-1.5 py-0.5 text-xs [overflow-wrap:anywhere]">
             {v}
@@ -72,8 +73,12 @@ export function Diagnosis({ result, engineer, animate = false }: { result: Resul
           <p className="text-xs text-muted-foreground">Service mencatat transaksi ini dengan ID sendiri; log dari ID tersebut ikut dianalisis.</p>
         </div>
       )}
-      {summary.done && result.sprintIdentifier && <Chips label="Sprint" values={[result.sprintIdentifier]} />}
-      {summary.done && result.pods && result.pods.length > 0 && <Chips label="Pod" values={result.pods} />}
+      {summary.done && (
+        <Chips label="Sprint · dari request header X-SPRINT-IDENTIFIER" values={result.sprintIdentifier ? [result.sprintIdentifier] : []}>
+          {!result.sprintIdentifier && <p className="text-xs text-muted-foreground">Tidak ada. Header ini hanya terbaca kalau input berupa curl yang memuatnya.</p>}
+        </Chips>
+      )}
+      {summary.done && result.pods && result.pods.length > 0 && <Chips label="Pod · dari log Splunk" values={result.pods} />}
     </div>
   )
 }
