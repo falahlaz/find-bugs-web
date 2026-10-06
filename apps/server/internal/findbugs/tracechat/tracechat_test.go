@@ -336,3 +336,52 @@ func TestRetraceConfig(t *testing.T) {
 		t.Fatalf("refs of config err = %v", err)
 	}
 }
+
+type recordingTracer struct {
+	analyzer.Fake
+	repos chan []analyzer.Repo
+}
+
+func (r recordingTracer) Ask(ctx context.Context, s analyzer.Session, q, recap string, rs []analyzer.Repo, p analyzer.Progress) (analyzer.Answer, error) {
+	r.repos <- rs
+	return r.Fake.Ask(ctx, s, q, recap, rs, p)
+}
+
+func TestAskDeployedNow(t *testing.T) {
+	tr := recordingTracer{repos: make(chan []analyzer.Repo, 1)}
+	e := setup(t, tr)
+	e.svc.ConfigRepo = &fakeConfig{}
+	ctx := context.Background()
+	ts, _ := e.st.GetTraceSession(ctx, e.job)
+	ts.Repos = []store.TraceRepo{
+		{Container: "svc", Project: "g/svc", Dir: "/w/g/svc@old", Commit: "old", Ref: "mr", RefSource: store.RefDeployed, Env: "dev"},
+		{Container: "auth", Project: "g/auth", Dir: "/w/g/auth@a", Commit: "a", Ref: "mr", RefSource: store.RefDeployed, Env: "preprod"},
+		{Kind: store.RepoConfig, Project: "ops/cfg", Dir: "/w/ops/cfg@dev0", Path: "json-files", Commit: "cfg-dev0", Ref: "dev", RefSource: store.RefDeployed, Env: "dev"},
+	}
+	if err := e.st.SaveTraceSession(ctx, ts); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.svc.Ask(ctx, e.job, e.user, "sekarang sudah ada?"); err != nil {
+		t.Fatal(err)
+	}
+	rs := <-tr.repos
+	v := e.wait(t)
+	if len(rs) != 6 {
+		t.Fatalf("repos = %+v", rs)
+	}
+	svc, auth, cfg := rs[3], rs[4], rs[5]
+	if !svc.Now || svc.Project != "g/svc" || svc.Commit != "sha-dev" || svc.Dir != "/w/g/svc@sha-dev" || svc.Env != "dev" {
+		t.Errorf("service deployed now = %+v", svc)
+	}
+	if !auth.Now || auth.Dir != "" || !strings.Contains(auth.Err, "not found") {
+		t.Errorf("undeployed service = %+v", auth)
+	}
+	if !cfg.Now || !cfg.Config || cfg.Commit != "cfg-dev" || cfg.Dir != "/w/ops/cfg@dev/json-files" {
+		t.Errorf("config deployed now = %+v", cfg)
+	}
+	// The checkouts are for the question only; the session keeps its own.
+	ts, _ = e.st.GetTraceSession(ctx, e.job)
+	if len(ts.Repos) != 3 || len(v.Messages[1].Progress) != 4 {
+		t.Fatalf("session repos = %+v, progress = %v", ts.Repos, v.Messages[1].Progress)
+	}
+}

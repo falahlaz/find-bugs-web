@@ -170,7 +170,8 @@ func (s *Service) Ask(ctx context.Context, jobID, userID int64, question string)
 		if ts.Restart {
 			recap = s.recap(ctx, jobID)
 		}
-		a, err := s.Tracer.Ask(ctx, session(ts), question, recap, analyzerRepos(ts.Repos), progress)
+		rs := append(analyzerRepos(ts.Repos), s.deployedNow(ctx, ts.Repos, progress)...)
+		a, err := s.Tracer.Ask(ctx, session(ts), question, recap, rs, progress)
 		if err != nil {
 			return failed(ctx, err)
 		}
@@ -365,6 +366,54 @@ func failed(ctx context.Context, err error) store.TraceTurnResult {
 		return store.TraceTurnResult{Err: "Dihentikan: " + cause.Error()}
 	}
 	return store.TraceTurnResult{Err: "Gagal: " + redact.Sensitive(err.Error())}
+}
+
+// deployedNow checks out, for a question, the version deployed now to the
+// environments the session's checkouts came from: the same services and
+// config repo, never others, so questions about the current state can be
+// answered. A version that cannot be fetched is listed with the reason.
+func (s *Service) deployedNow(ctx context.Context, rs []store.TraceRepo, progress analyzer.Progress) []analyzer.Repo {
+	var out []analyzer.Repo
+	seen := map[string]bool{}
+	for _, r := range rs {
+		key := r.Kind + " " + r.Project + " " + r.Env
+		if r.Env == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		switch {
+		case r.Kind == store.RepoConfig && s.ConfigRepo != nil:
+			progress("Mengambil config " + r.Env + " yang ter-deploy sekarang")
+			cc, err := s.ConfigRepo.Checkout(ctx, r.Env, time.Time{})
+			if err != nil {
+				out = append(out, analyzer.Repo{Project: r.Project, Env: r.Env, Config: true, Now: true, Err: redact.Sensitive(err.Error())})
+				continue
+			}
+			a := configrepo.Repo(cc.Repo)
+			a.Now = true
+			out = append(out, a)
+		case r.Kind == "" && s.GitLab != nil && s.Repos != nil:
+			progress("Mengambil kode " + r.Project + " yang ter-deploy di " + r.Env + " sekarang")
+			a, err := s.deployedService(ctx, r)
+			if err != nil {
+				a = analyzer.Repo{Project: r.Project, Env: r.Env, Now: true, Err: redact.Sensitive(err.Error())}
+			}
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+func (s *Service) deployedService(ctx context.Context, r store.TraceRepo) (analyzer.Repo, error) {
+	dep, err := s.GitLab.DeployedCommit(ctx, r.Project, r.Env, time.Time{})
+	if err != nil {
+		return analyzer.Repo{}, err
+	}
+	co, err := s.Repos.Sync(ctx, r.Container, dep.SHA)
+	if err != nil {
+		return analyzer.Repo{}, err
+	}
+	return analyzer.Repo{Project: r.Project, Dir: co.Dir, Commit: co.Commit, Ref: dep.Ref, Env: r.Env, Now: true}, nil
 }
 
 func session(ts store.TraceSession) analyzer.Session {
