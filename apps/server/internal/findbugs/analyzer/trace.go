@@ -29,10 +29,24 @@ type Repo struct {
 	// last commit before the error).
 	Config   bool
 	Deployed bool
+	// Now marks the version deployed to Env at the time of a question,
+	// checked out for it next to the versions the session traced. Err,
+	// when set, says why it could not be checked out; Dir is empty then.
+	Now bool
+	Err string
 }
 
 // describe tells the model which version a checkout holds.
 func (r Repo) describe() string {
+	if r.Now {
+		if r.Config && !r.Deployed {
+			return fmt.Sprintf("branch %s at commit %s, its latest config commit; which commit is deployed to the %s ConfigMaps now could not be confirmed", r.Ref, r.Commit, r.Env)
+		}
+		if r.Config {
+			return fmt.Sprintf("branch %s at commit %s, the config deployed to the %s ConfigMaps now", r.Ref, r.Commit, r.Env)
+		}
+		return fmt.Sprintf("commit %s from %s, the version deployed to %s now", r.Commit, r.Ref, r.Env)
+	}
 	if r.Config {
 		if r.Deployed {
 			return fmt.Sprintf("branch %s at commit %s, the config deployed to the %s ConfigMaps", r.Ref, r.Commit, r.Env)
@@ -110,6 +124,7 @@ An earlier pass diagnosed the logs of one transaction and concluded the root cau
 The logs are in ./logs.txt in your working directory. Local checkouts of the services' source code are in the directories listed in the user message.
 You can only use the Read, Grep and Glob tools, and only inside those directories.
 Your job is to find the place in the service code where the error is raised or caused, and explain it to the backend engineer who will fix it. Afterwards the engineers may ask follow-up questions or ask you to look at another version of the code; such checkouts are added and named in their messages.
+Answer each question as it is asked. Earlier turns are context, not limits, and what they say about a version may be outdated. With each question you also get checkouts of the version deployed now of the same repos (when it differs from the traced ones, in its own directory): use the traced versions for questions about the error, the ones deployed now for questions about the current state ("sekarang", "terbaru", "sudah di-fix?"), compare them when asked, and always say which commit your answer is based on.
 
 The services run in containers with their code at /usr/src/app, so a stack frame like /usr/src/app/server/api/payment.js:2141:22 is server/api/payment.js line 2141 in the checkout. A log event's "tags" often start with the source file name that logged it (e.g. "paymentHelper.js"); Grep the checkout for that file and for the exact log message text to find the logging call.
 Stop at the service's own code: ignore frames inside node_modules or vendored libraries and point at the service code that called them.
@@ -159,14 +174,24 @@ func TracePrompt(transactionID string, d Diagnosis, repos []Repo) string {
 	return fmt.Sprintf(tracePromptTemplate, transactionID, diag, listRepos(repos))
 }
 
-// listRepos lists the service checkouts, then the runtime config.
+// listRepos lists the service checkouts, then the runtime config, then the
+// versions deployed now.
 func listRepos(repos []Repo) string {
-	var rs, cfg strings.Builder
+	var rs, cfg, now strings.Builder
 	for _, r := range repos {
 		line := fmt.Sprintf("- %s → %s (%s)\n", r.Project, r.Dir, r.describe())
-		if r.Config {
+		switch {
+		case r.Now && r.Err != "":
+			what := "the version deployed to " + r.Env + " now"
+			if r.Config {
+				what = "the config deployed to the " + r.Env + " ConfigMaps now"
+			}
+			fmt.Fprintf(&now, "- %s: %s could not be fetched (%s)\n", r.Project, what, r.Err)
+		case r.Now:
+			now.WriteString(line)
+		case r.Config:
 			cfg.WriteString(line)
-		} else {
+		default:
 			rs.WriteString(line)
 		}
 	}
@@ -174,6 +199,9 @@ func listRepos(repos []Repo) string {
 		rs.WriteString("\nRuntime JSON config: not available for this trace.")
 	} else {
 		rs.WriteString("\nRuntime JSON config (GitLab project → directory of its JSON files, version):\n" + cfg.String())
+	}
+	if now.Len() > 0 {
+		rs.WriteString("\nDeployed now, checked out for this question (GitLab project → directory, version):\n" + now.String())
 	}
 	return strings.TrimRight(rs.String(), "\n")
 }
@@ -224,7 +252,7 @@ const askPromptTemplate = `%sAn engineer asks:
 Checkouts you may read:
 %s
 
-Answer in Markdown prose in Bahasa Indonesia, not JSON. Read the code and logs again when the question needs it; cite files as path:line. Say so when the logs or code do not show the answer.`
+Answer in Markdown prose in Bahasa Indonesia, not JSON. Answer this question as asked, from the version it is about; read the code, config and logs again when it needs them rather than relying on earlier answers. Cite files as path:line and name the commit you read. Say so when the logs or code do not show the answer.`
 
 // AskPrompt renders an engineer's question. recap, when set, gives back
 // the context of a conversation that had to be started again.
@@ -294,7 +322,9 @@ func (c ClaudeCode) TraceArgs(s Session, repos []Repo) []string {
 		args = append(args, "--session-id", s.ID)
 	}
 	for _, r := range repos {
-		args = append(args, "--add-dir", r.Dir)
+		if r.Dir != "" {
+			args = append(args, "--add-dir", r.Dir)
+		}
 	}
 	return args
 }
@@ -366,8 +396,11 @@ func toolProgress(dir string, repos []Repo, progress Progress) func(tool string,
 		perProject[r.Project]++
 	}
 	name := func(r Repo) string {
-		if r.Config {
+		if r.Config && (perProject[r.Project] == 1 || len(r.Commit) < 8) {
 			return "config " + r.Ref
+		}
+		if r.Config {
+			return "config " + r.Ref + "@" + r.Commit[:8]
 		}
 		if perProject[r.Project] > 1 && len(r.Commit) >= 8 {
 			return r.Project + "@" + r.Commit[:8]

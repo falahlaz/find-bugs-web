@@ -187,6 +187,19 @@ func TestTraceArgsAndPrompts(t *testing.T) {
 	if p := AskPrompt("q?", "", []Repo{repos[0], cfg}); !strings.Contains(p, "the last config commit before the error; its deployment to dev could not be confirmed") {
 		t.Errorf("ask prompt with fallback config:\n%s", p)
 	}
+	now := []Repo{repos[0],
+		{Project: "g/a", Dir: "/w/a@9", Commit: "9", Ref: "9.5.0", Env: "production", Now: true},
+		{Project: "ops/cfg", Dir: "/w/cfg@2/json-files", Commit: "c2", Ref: "dev", Env: "dev", Config: true, Deployed: true, Now: true},
+		{Project: "g/b", Env: "dev", Now: true, Err: "boom"}}
+	if p := AskPrompt("q?", "", now); !strings.Contains(p, "Deployed now, checked out for this question (GitLab project → directory, version):\n"+
+		"- g/a → /w/a@9 (commit 9 from 9.5.0, the version deployed to production now)\n"+
+		"- ops/cfg → /w/cfg@2/json-files (branch dev at commit c2, the config deployed to the dev ConfigMaps now)\n"+
+		"- g/b: the version deployed to dev now could not be fetched (boom)") || !strings.Contains(p, "not available") {
+		t.Errorf("ask prompt with versions deployed now:\n%s", p)
+	}
+	if args := strings.Join(c.TraceArgs(Session{ID: "u1"}, now), " "); strings.Count(args, "--add-dir") != 3 {
+		t.Errorf("args with an unavailable checkout = %s", args)
+	}
 	if !strings.Contains(p, "**Penyebab**") || !strings.Contains(p, "**Perbaikan**") {
 		t.Error("trace prompt does not ask for a structured explanation")
 	}
