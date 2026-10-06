@@ -7,6 +7,7 @@ import { statusInfo, type JobStatus } from '@/features/findbugs/status'
 import { useSplunkReauth } from '@/features/splunk/queries'
 import { cn } from '@/lib/utils'
 import { useAuth } from './auth-context'
+import { hasMenu, type Menu } from './menus'
 import { setPaletteOpen as setOpen, togglePalette, usePaletteOpen } from './palette-store'
 
 type Item = { key: string; label: string; hint: string; icon: LucideIcon; mono?: boolean; run: () => void }
@@ -42,7 +43,7 @@ function PaletteDialog() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const reauth = useSplunkReauth()
-  const jobs = useJobs({})
+  const jobs = useJobs({}, undefined, hasMenu(user, 'investigasi'))
   const [query, setQuery] = useState('')
   const [active, setActive] = useState(0)
 
@@ -51,14 +52,15 @@ function PaletteDialog() {
       setOpen(false)
       navigate(to)
     }
-    const actions: Item[] = [
-      { key: 'new', label: 'Investigasi baru', hint: 'Form submit', icon: Plus, run: go('/') },
-      { key: 'jobs', label: 'Daftar investigasi', hint: 'Semua job', icon: Clock, run: go('/jobs') },
-      { key: 'conn', label: 'Koneksi VPN & Splunk', hint: 'Status sistem', icon: Plug, run: go('/koneksi') },
-      { key: 'reports', label: 'Laporan trace', hint: 'Knowledge base', icon: FileText, run: go('/laporan') },
-      { key: 'tools', label: 'Tools MyTelkomsel', hint: 'Deeplink, hashsign, decrypt', icon: Wrench, run: go('/tools') },
+    const menuActions: (Item & { menu: Menu })[] = [
+      { key: 'new', menu: 'investigasi', label: 'Investigasi baru', hint: 'Form submit', icon: Plus, run: go('/') },
+      { key: 'jobs', menu: 'investigasi', label: 'Daftar investigasi', hint: 'Semua job', icon: Clock, run: go('/jobs') },
+      { key: 'conn', menu: 'koneksi', label: 'Koneksi VPN & Splunk', hint: 'Status sistem', icon: Plug, run: go('/koneksi') },
+      { key: 'reports', menu: 'laporan', label: 'Laporan trace', hint: 'Knowledge base', icon: FileText, run: go('/laporan') },
+      { key: 'tools', menu: 'tools', label: 'Tools MyTelkomsel', hint: 'Deeplink, hashsign, decrypt', icon: Wrench, run: go('/tools') },
       {
         key: 'reauth',
+        menu: 'koneksi',
         label: 'Re-auth Splunk',
         hint: 'Kirim push 2FA',
         icon: Database,
@@ -69,6 +71,7 @@ function PaletteDialog() {
         },
       },
     ]
+    const actions: Item[] = menuActions.filter((i) => hasMenu(user, i.menu))
     if (user?.role === 'engineer') {
       actions.push(
         { key: 'users', label: 'Kelola user', hint: 'Engineer', icon: Users, run: go('/users') },
@@ -89,7 +92,7 @@ function PaletteDialog() {
       ['Aksi', actions.filter(match)],
       [q ? 'Job' : 'Job terbaru', jobItems.filter(match).slice(0, q ? 8 : 5)],
     ]
-    if (q.length >= 3)
+    if (q.length >= 3 && hasMenu(user, 'investigasi'))
       out.push([
         'Histori',
         [{ key: 'search', label: `Cari "${query.trim()}" di histori`, hint: 'Filter transaction ID', icon: Search, run: () => {

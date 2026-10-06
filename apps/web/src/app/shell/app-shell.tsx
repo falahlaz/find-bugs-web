@@ -4,18 +4,19 @@ import { NavLink, useLocation } from 'react-router'
 import { JobInbox } from '@/features/findbugs/job-inbox'
 import { cn } from '@/lib/utils'
 import { useAuth } from '../auth-context'
+import { hasMenu, type Menu } from '../menus'
 import { openPalette } from '../palette-store'
 import { ThemeToggle } from '../theme-toggle'
 import { engineerNav, initials } from './nav'
 import { useHealth } from './use-health'
 import { AccountSheet, SystemBanners } from './shared'
 
-const tabs = [
-  { to: '/jobs', label: 'Investigasi', icon: Inbox },
-  { to: '/', label: 'Baru', icon: Plus, end: true },
-  { to: '/koneksi', label: 'Koneksi', icon: Plug },
-  { to: '/laporan', label: 'Laporan', icon: FileText },
-  { to: '/tools', label: 'Tools', icon: Wrench },
+const tabs: { to: string; label: string; icon: typeof Inbox; menu: Menu; end?: boolean }[] = [
+  { to: '/jobs', label: 'Investigasi', icon: Inbox, menu: 'investigasi' },
+  { to: '/', label: 'Baru', icon: Plus, menu: 'investigasi', end: true },
+  { to: '/koneksi', label: 'Koneksi', icon: Plug, menu: 'koneksi' },
+  { to: '/laporan', label: 'Laporan', icon: FileText, menu: 'laporan' },
+  { to: '/tools', label: 'Tools', icon: Wrench, menu: 'tools' },
 ]
 
 // The list, the composer and a job are all one place: the investigations.
@@ -67,7 +68,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (!user) return null
   const engineer = user.role === 'engineer'
   const connAlert = health.vpnOk === false || health.splunkOk === false ? 'bad' : health.splunkBusy ? 'warn' : undefined
-  const withList = investigating(pathname)
+  const can = (m: Menu) => hasMenu(user, m)
+  const withList = investigating(pathname) && can('investigasi')
   // Phones show one pane at a time: the list on /jobs, the detail elsewhere.
   const listOnly = pathname === '/jobs'
 
@@ -77,10 +79,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       <div className="flex min-h-0 flex-1">
         <nav aria-label="Navigasi" className="hidden w-[80px] shrink-0 flex-col items-center gap-1 bg-rail py-3 md:flex">
           <span className="mb-3 grid size-8 place-items-center rounded-lg bg-primary font-mono text-[11px] font-semibold text-primary-foreground">FB</span>
-          <RailLink to="/jobs" label="Investigasi" icon={Inbox} active={investigating(pathname)} />
-          <RailLink to="/koneksi" label="Koneksi" icon={Plug} alert={connAlert} />
-          <RailLink to="/laporan" label="Laporan" icon={FileText} />
-          <RailLink to="/tools" label="Tools" icon={Wrench} />
+          {can('investigasi') && <RailLink to="/jobs" label="Investigasi" icon={Inbox} active={investigating(pathname)} />}
+          {can('koneksi') && <RailLink to="/koneksi" label="Koneksi" icon={Plug} alert={connAlert} />}
+          {can('laporan') && <RailLink to="/laporan" label="Laporan" icon={FileText} />}
+          {can('tools') && <RailLink to="/tools" label="Tools" icon={Wrench} />}
           {engineer && (
             <>
               <span className="my-2 h-px w-8 bg-white/10" />
@@ -125,7 +127,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </div>
 
       <nav aria-label="Navigasi" className="flex border-t bg-card px-1.5 pt-1.5 pb-[calc(6px+env(safe-area-inset-bottom))] md:hidden">
-        {tabs.map((t) => (
+        {tabs.filter((t) => can(t.menu)).map((t) => (
           <NavLink
             key={t.to}
             to={t.to}

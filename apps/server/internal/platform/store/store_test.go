@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
@@ -146,5 +147,36 @@ func TestJobLifecycle(t *testing.T) {
 	}
 	if es, _ := s.ListAudit(ctx, 10); len(es) != 1 || es[0].Username != "a" {
 		t.Errorf("audit = %+v", es)
+	}
+}
+
+func TestUserMenus(t *testing.T) {
+	ctx := context.Background()
+	s, _ := newStore(t)
+	u, _ := s.CreateUser(ctx, "qa", "h", RoleQA)
+	if !slices.Equal(u.Menus, AllMenus) {
+		t.Fatalf("new user menus = %v, want all", u.Menus)
+	}
+	ms, ok := NormalizeMenus([]Menu{MenuTools, MenuInvestigasi, MenuTools})
+	if !ok || !slices.Equal(ms, []Menu{MenuInvestigasi, MenuTools}) {
+		t.Fatalf("NormalizeMenus = %v, %v", ms, ok)
+	}
+	if _, ok := NormalizeMenus([]Menu{"users"}); ok {
+		t.Fatal("unknown menu accepted")
+	}
+	u, err := s.UpdateUser(ctx, u.ID, UserUpdate{Menus: &ms})
+	if err != nil || !slices.Equal(u.Menus, ms) || u.HasMenu(MenuLaporan) || !u.HasMenu(MenuTools) {
+		t.Fatalf("after update = %+v, %v", u, err)
+	}
+	none := []Menu{}
+	u, _ = s.UpdateUser(ctx, u.ID, UserUpdate{Menus: &none})
+	if len(u.Menus) != 0 || u.HasMenu(MenuInvestigasi) {
+		t.Fatalf("empty menus = %v", u.Menus)
+	}
+	// Engineers see every menu whatever is stored.
+	eng := RoleEngineer
+	u, _ = s.UpdateUser(ctx, u.ID, UserUpdate{Role: &eng})
+	if !slices.Equal(u.Menus, AllMenus) || !u.HasMenu(MenuLaporan) {
+		t.Fatalf("engineer menus = %v", u.Menus)
 	}
 }

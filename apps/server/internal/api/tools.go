@@ -5,13 +5,14 @@ import (
 	"net/http"
 
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/httpx"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/store"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/tools"
 )
 
 func (a *API) registerToolRoutes() {
-	a.add(route{method: "GET", path: "/api/tools", summary: "MyTelkomsel support tools and their form fields", tag: "tools", opID: "listTools",
+	a.add(route{method: "GET", path: "/api/tools", menu: store.MenuTools, summary: "MyTelkomsel support tools and their form fields", tag: "tools", opID: "listTools",
 		resps: map[int]any{200: ToolsResponse{}}, h: a.listTools})
-	a.add(route{method: "POST", path: "/api/tools/{tool}/run", summary: "Run a tool with the form values (400 bad input, 422 the tool refused)", tag: "tools", opID: "runTool",
+	a.add(route{method: "POST", path: "/api/tools/{tool}/run", menu: store.MenuTools, summary: "Run a tool with the form values (400 bad input, 422 the tool refused)", tag: "tools", opID: "runTool",
 		req: ToolInput{}, resps: map[int]any{200: tools.ToolResult{}}, h: a.runTool})
 }
 

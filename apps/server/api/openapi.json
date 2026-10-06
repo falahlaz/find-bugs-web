@@ -252,6 +252,19 @@
       },
       "CreateUserRequest": {
         "properties": {
+          "menus": {
+            "description": "Menus a QA can open; omitted = all",
+            "items": {
+              "enum": [
+                "investigasi",
+                "koneksi",
+                "laporan",
+                "tools"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
           "password": {
             "type": "string"
           },
@@ -1658,6 +1671,20 @@
             "nullable": true,
             "type": "boolean"
           },
+          "menus": {
+            "description": "Replaces the menus a QA can open",
+            "items": {
+              "enum": [
+                "investigasi",
+                "koneksi",
+                "laporan",
+                "tools"
+              ],
+              "type": "string"
+            },
+            "nullable": true,
+            "type": "array"
+          },
           "password": {
             "nullable": true,
             "type": "string"
@@ -1686,6 +1713,19 @@
             "format": "int64",
             "type": "integer"
           },
+          "menus": {
+            "description": "Menus this user can open; engineers always get all",
+            "items": {
+              "enum": [
+                "investigasi",
+                "koneksi",
+                "laporan",
+                "tools"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
           "role": {
             "enum": [
               "qa",
@@ -1701,6 +1741,7 @@
           "active",
           "createdAt",
           "id",
+          "menus",
           "role",
           "username"
         ],
@@ -2059,7 +2100,8 @@
         "summary": "List jobs (QA: own only)",
         "tags": [
           "jobs"
-        ]
+        ],
+        "x-menu": "investigasi"
       },
       "post": {
         "operationId": "submitJob",
@@ -2113,7 +2155,8 @@
         "summary": "Submit an investigation",
         "tags": [
           "jobs"
-        ]
+        ],
+        "x-menu": "investigasi"
       }
     },
     "/api/jobs/{id}": {
@@ -2160,7 +2203,8 @@
         "summary": "Job detail and result",
         "tags": [
           "jobs"
-        ]
+        ],
+        "x-menu": "investigasi"
       }
     },
     "/api/jobs/{id}/cancel": {
@@ -2207,7 +2251,8 @@
         "summary": "Cancel a pending job",
         "tags": [
           "jobs"
-        ]
+        ],
+        "x-menu": "investigasi"
       }
     },
     "/api/jobs/{id}/trace": {
@@ -2615,7 +2660,8 @@
         "summary": "Trace reports in KNOWLEDGE_DIR",
         "tags": [
           "reports"
-        ]
+        ],
+        "x-menu": "laporan"
       }
     },
     "/api/repos": {
@@ -2835,7 +2881,8 @@
         "summary": "Start SSO re-auth (waits for 2FA in background)",
         "tags": [
           "splunk"
-        ]
+        ],
+        "x-menu": "koneksi"
       }
     },
     "/api/splunk/status": {
@@ -2871,7 +2918,8 @@
         "summary": "Splunk session state",
         "tags": [
           "splunk"
-        ]
+        ],
+        "x-menu": "koneksi"
       }
     },
     "/api/system/status": {
@@ -2943,7 +2991,8 @@
         "summary": "MyTelkomsel support tools and their form fields",
         "tags": [
           "tools"
-        ]
+        ],
+        "x-menu": "tools"
       }
     },
     "/api/tools/{tool}/run": {
@@ -3000,7 +3049,8 @@
         "summary": "Run a tool with the form values (400 bad input, 422 the tool refused)",
         "tags": [
           "tools"
-        ]
+        ],
+        "x-menu": "tools"
       }
     },
     "/api/users": {
@@ -3192,7 +3242,8 @@
         "summary": "Submit the globalprotectcallback: URI",
         "tags": [
           "vpn"
-        ]
+        ],
+        "x-menu": "koneksi"
       }
     },
     "/api/vpn/connect": {
@@ -3228,7 +3279,8 @@
         "summary": "Start GlobalProtect connect",
         "tags": [
           "vpn"
-        ]
+        ],
+        "x-menu": "koneksi"
       }
     },
     "/api/vpn/disconnect": {
@@ -3264,7 +3316,8 @@
         "summary": "Disconnect GlobalProtect",
         "tags": [
           "vpn"
-        ]
+        ],
+        "x-menu": "koneksi"
       }
     },
     "/api/vpn/login-url": {
@@ -3300,7 +3353,8 @@
         "summary": "SAML login link once captured",
         "tags": [
           "vpn"
-        ]
+        ],
+        "x-menu": "koneksi"
       }
     },
     "/api/vpn/logs": {
@@ -3336,7 +3390,8 @@
         "summary": "Redacted connect log",
         "tags": [
           "vpn"
-        ]
+        ],
+        "x-menu": "koneksi"
       }
     },
     "/api/vpn/status": {
@@ -3372,7 +3427,8 @@
         "summary": "Live VPN status",
         "tags": [
           "vpn"
-        ]
+        ],
+        "x-menu": "koneksi"
       }
     },
     "/healthz": {

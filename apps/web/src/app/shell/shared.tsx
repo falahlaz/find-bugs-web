@@ -3,6 +3,7 @@ import { useEffect, type ReactNode } from 'react'
 import { Link, NavLink } from 'react-router'
 import { cn } from '@/lib/utils'
 import { useAuth } from '../auth-context'
+import { hasMenu } from '../menus'
 import { ThemeToggle } from '../theme-toggle'
 import { useSystemStatus } from '../use-system-status'
 import { engineerNav } from './nav'
@@ -23,6 +24,7 @@ export function StatusDot({ ok, busy = false, className }: { ok: boolean | null;
 /** Global VPN/Splunk banners from the server. */
 export function SystemBanners({ className }: { className?: string }) {
   const { data } = useSystemStatus()
+  const { user } = useAuth()
   if (!data?.banners.length) return null
   return (
     <div className={cn('flex flex-col', className)}>
@@ -38,7 +40,7 @@ export function SystemBanners({ className }: { className?: string }) {
         >
           <StatusDot ok={b.level === 'info'} busy={b.level === 'warning'} />
           <span>{b.message}</span>
-          {b.action && (
+          {b.action && hasMenu(user, 'koneksi') && (
             <Link to={`/koneksi#${b.action}`} className="font-medium underline underline-offset-2">
               Buka Koneksi
             </Link>

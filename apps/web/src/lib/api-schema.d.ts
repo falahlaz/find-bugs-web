@@ -629,6 +629,8 @@ export interface components {
             url?: string;
         };
         CreateUserRequest: {
+            /** @description Menus a QA can open; omitted = all */
+            menus?: ("investigasi" | "koneksi" | "laporan" | "tools")[];
             password: string;
             /** @enum {string} */
             role: "qa" | "engineer";
@@ -1015,6 +1017,8 @@ export interface components {
         };
         UpdateUserRequest: {
             active?: boolean | null;
+            /** @description Replaces the menus a QA can open */
+            menus?: ("investigasi" | "koneksi" | "laporan" | "tools")[] | null;
             password?: string | null;
             /** @enum {string|null} */
             role?: "qa" | "engineer" | null;
@@ -1025,6 +1029,8 @@ export interface components {
             createdAt: string;
             /** Format: int64 */
             id: number;
+            /** @description Menus this user can open; engineers always get all */
+            menus: ("investigasi" | "koneksi" | "laporan" | "tools")[];
             /** @enum {string} */
             role: "qa" | "engineer";
             username: string;

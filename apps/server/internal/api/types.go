@@ -158,13 +158,16 @@ type CreateUserRequest struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Role     string `json:"role" enum:"qa,engineer"`
+	// Omitted means every menu.
+	Menus []store.Menu `json:"menus,omitempty" doc:"Menus a QA can open; omitted = all"`
 }
 
 // UpdateUserRequest changes an account; omitted fields stay.
 type UpdateUserRequest struct {
-	Role     *string `json:"role,omitempty" enum:"qa,engineer"`
-	Active   *bool   `json:"active,omitempty"`
-	Password *string `json:"password,omitempty"`
+	Role     *string       `json:"role,omitempty" enum:"qa,engineer"`
+	Active   *bool         `json:"active,omitempty"`
+	Password *string       `json:"password,omitempty"`
+	Menus    *[]store.Menu `json:"menus,omitempty" doc:"Replaces the menus a QA can open"`
 }
 
 // UserListResponse lists accounts.
