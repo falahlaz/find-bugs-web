@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -66,13 +67,13 @@ func newHarness(t *testing.T) *harness {
 
 	mon := watchdog.New(gp, sp, nil, "")
 	mon.CheckVPN(ctx)
-	wk := worker.New(st, sp, analyzer.Fake{}, mon, nil, worker.Config{JobTimeout: 5 * time.Second})
+	wk := worker.New(st, sp, analyzer.Fake{}, mon, nil, worker.Config{JobTimeout: 5 * time.Second, LogDir: filepath.Join(dir, "logs")})
 	cfg := config.Config{QueueMax: 10, QueuePerUser: 3, Location: time.UTC}
 	a := &API{
 		Cfg: cfg, Store: st, Auth: auth.NewService(st, time.Hour, false),
 		Jobs: &jobs.Service{Store: st, Environments: []string{"prod", "dev"}, Header: "X-Transaction-ID",
 			Limits: store.Limits{Total: 10, PerUser: 3}, DedupWindow: 24 * time.Hour, Wake: wk.Wake},
-		VPN: gp, Splunk: sp, Monitor: mon, Version: "test",
+		VPN: gp, Splunk: sp, Monitor: mon, Version: "test", LogDir: filepath.Join(dir, "logs"),
 		Web: fstest.MapFS{"index.html": {Data: []byte("<html>app</html>")}, "assets/app.js": {Data: []byte("js")}},
 	}
 	srv := httptest.NewServer(a.Handler())
@@ -131,7 +132,7 @@ func (c *client) do(method, path string, body, out any) int {
 func TestJobFlowAndRoles(t *testing.T) {
 	h := newHarness(t)
 	qa, qa2, eng := h.login("qa1"), h.login("qa2"), h.login("eng")
-	h.splunk.SetLogs("abc-1", "ERROR boom")
+	h.splunk.SetLogs("abc-1", "ERROR boom user a@b.com")
 
 	var envs EnvironmentsResponse
 	if qa.do("GET", "/api/environments", nil, &envs); strings.Join(envs.Environments, ",") != "dev,prod" {
@@ -163,6 +164,27 @@ func TestJobFlowAndRoles(t *testing.T) {
 	}
 	if code := qa2.do("GET", path, nil, nil); code != 404 {
 		t.Errorf("other QA can see job: %d", code)
+	}
+
+	// Only engineers download the log file; it is gone once purged.
+	if code := qa.do("GET", path+"/logs", nil, nil); code != 403 {
+		t.Errorf("qa download: %d", code)
+	}
+	resp, err := eng.hc.Get(h.srv.URL + path + "/logs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != 200 || resp.Header.Get("Content-Disposition") != `attachment; filename="job-`+itoa(sub.Job.ID)+`-abc-1.log"` || !strings.Contains(string(body), "ERROR boom user a@b.com") {
+		t.Errorf("download = %d %v %q", resp.StatusCode, resp.Header, body)
+	}
+	if _, err := worker.PurgeLogFiles(h.api.LogDir, time.Now().Add(time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	var gone struct{ Code string }
+	if code := eng.do("GET", path+"/logs", nil, &gone); code != 404 || gone.Code != "logs_expired" {
+		t.Errorf("purged download = %d %+v", code, gone)
 	}
 	var list JobListResponse
 	qa2.do("GET", "/api/jobs", nil, &list)

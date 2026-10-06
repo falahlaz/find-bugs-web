@@ -4,9 +4,11 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -17,6 +19,7 @@ import (
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/splunk"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/tracechat"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/watchdog"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/worker"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/auth"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/config"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/httpx"
@@ -60,6 +63,8 @@ type API struct {
 	Version string
 	// BaseCtx outlives requests (for background re-auth).
 	BaseCtx context.Context
+	// LogDir holds the per-job Splunk log files (job-<id>[.raw].log).
+	LogDir string
 
 	routes  []route
 	cloning cloneState
@@ -134,6 +139,8 @@ func (a *API) registerRoutes() {
 		resps: map[int]any{200: JobListResponse{}}, h: a.listJobs})
 	a.add(route{method: "GET", path: "/api/jobs/{id}", summary: "Job detail and result", tag: "jobs", opID: "getJob",
 		resps: map[int]any{200: JobView{}}, h: a.getJob})
+	a.add(route{method: "GET", path: "/api/jobs/{id}/logs", summary: "Download the job's Splunk log file", tag: "jobs", roles: []string{engineer},
+		raw: true, h: a.downloadJobLogs})
 	a.add(route{method: "POST", path: "/api/jobs/{id}/cancel", summary: "Cancel a pending job", tag: "jobs", opID: "cancelJob",
 		resps: map[int]any{200: JobView{}}, h: a.cancelJob})
 	a.registerTraceRoutes()
@@ -384,6 +391,44 @@ func (a *API) getJob(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusOK, view)
+}
+
+// downloadJobLogs serves the job's unredacted Splunk log file as an
+// attachment. Files are purged after RETENTION_LOG_FILE_DAYS.
+func (a *API) downloadJobLogs(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r)
+	if !ok {
+		return
+	}
+	j, err := a.Jobs.Get(r.Context(), identity(r).User, id)
+	if errors.Is(err, jobs.ErrNotFound) {
+		httpx.Error(w, http.StatusNotFound, "not_found", err.Error())
+		return
+	}
+	if err != nil {
+		httpx.Internal(w, r, err)
+		return
+	}
+	f, err := os.Open(worker.RawLogFilePath(a.LogDir, id))
+	if errors.Is(err, os.ErrNotExist) {
+		httpx.Error(w, http.StatusNotFound, "logs_expired", "Log sudah tidak tersedia (disimpan maksimal 3 hari) atau job ini tidak punya log.")
+		return
+	}
+	if err != nil {
+		httpx.Internal(w, r, err)
+		return
+	}
+	defer f.Close()
+	fi, err := f.Stat()
+	if err != nil {
+		httpx.Internal(w, r, err)
+		return
+	}
+	a.audit(r, "download_logs", "ok", fmt.Sprintf("job #%d", id))
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="job-%d-%s.log"`, id, j.TransactionID))
+	w.Header().Set("Cache-Control", "no-store")
+	http.ServeContent(w, r, "", fi.ModTime(), f)
 }
 
 func (a *API) cancelJob(w http.ResponseWriter, r *http.Request) {

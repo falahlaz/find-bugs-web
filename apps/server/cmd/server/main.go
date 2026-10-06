@@ -165,7 +165,7 @@ func serve() error {
 			Store: st, Environments: cfg.Splunk.Environments(), Header: cfg.TransactionIDHeader,
 			Limits: store.Limits{Total: cfg.QueueMax, PerUser: cfg.QueuePerUser}, DedupWindow: cfg.DedupWindow, Wake: wk.Wake,
 		},
-		VPN: gp, Splunk: sp, Monitor: mon, Web: webFS, Version: version, BaseCtx: ctx,
+		VPN: gp, Splunk: sp, Monitor: mon, Web: webFS, Version: version, BaseCtx: ctx, LogDir: logDir(cfg),
 	}
 	if chat != nil {
 		a.Trace = chat
@@ -208,7 +208,8 @@ func serve() error {
 	return srv.Shutdown(shutdown)
 }
 
-// maintenance purges expired sessions hourly and applies retention daily.
+// maintenance purges expired sessions and log files hourly and applies the
+// other retention daily.
 func maintenance(ctx context.Context, st *store.Store, cfg config.Config, chat *tracechat.Service) {
 	tick := time.NewTicker(time.Hour)
 	defer tick.Stop()
@@ -224,17 +225,19 @@ func maintenance(ctx context.Context, st *store.Store, cfg config.Config, chat *
 				slog.Info("trace cleanup", "sessions_purged", n, "worktrees_removed", w)
 			}
 		}
+		// Log files are purged hourly so none outlives RetainLogFiles by more
+		// than an hour.
+		if n, err := worker.PurgeLogFiles(logDir(cfg), time.Now().Add(-cfg.RetainLogFiles)); err != nil && ctx.Err() == nil {
+			slog.Error("retention log files", "err", err)
+		} else if n > 0 {
+			slog.Info("retention: log files purged", "count", n)
+		}
 		if time.Since(lastRetention) >= 24*time.Hour {
 			now := time.Now()
 			if n, err := st.PurgeRawLogs(ctx, now.Add(-cfg.RetainRawLogs)); err != nil {
 				slog.Error("retention raw logs", "err", err)
 			} else if n > 0 {
 				slog.Info("retention: raw logs purged", "count", n)
-			}
-			if n, err := worker.PurgeLogFiles(logDir(cfg), now.Add(-cfg.RetainRawLogs)); err != nil {
-				slog.Error("retention log files", "err", err)
-			} else if n > 0 {
-				slog.Info("retention: log files purged", "count", n)
 			}
 			if n, err := st.PurgeDiagnoses(ctx, now.Add(-cfg.RetainDiagnosis)); err != nil {
 				slog.Error("retention diagnoses", "err", err)

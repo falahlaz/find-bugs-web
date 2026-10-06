@@ -170,6 +170,7 @@ function JobDetail({ id }: { id: number }) {
           result={result}
           engineer={engineer}
           animate={justFinished}
+          jobId={id}
           trace={engineer && result.codeTrace ? <TraceSection jobId={id} initial={result.codeTrace} /> : undefined}
         />
       )}

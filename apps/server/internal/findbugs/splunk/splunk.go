@@ -253,8 +253,8 @@ func snippet(b []byte) string {
 }
 
 // BuildQuery renders the SPL template for env (Python str.format semantics
-// for {transaction_id}, {{ and }}) and appends " NOT kong". The transaction ID
-// must already be validated by the parser.
+// for {transaction_id}, {{ and }}). The transaction ID must already be
+// validated by the parser.
 func (c *Client) BuildQuery(env, txn string) (string, error) {
 	tpl, ok := c.cfg.Templates[env]
 	if !ok {
@@ -263,7 +263,7 @@ func (c *Client) BuildQuery(env, txn string) (string, error) {
 	q := strings.ReplaceAll(tpl, "{transaction_id}", "\x00")
 	q = strings.NewReplacer("{{", "{", "}}", "}").Replace(q)
 	q = strings.ReplaceAll(q, "\x00", txn)
-	return q + " NOT kong", nil
+	return q, nil
 }
 
 // Search runs the query for env/txn over the last timeRange (e.g. "24h").

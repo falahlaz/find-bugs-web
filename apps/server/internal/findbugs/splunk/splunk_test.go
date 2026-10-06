@@ -42,7 +42,7 @@ func newClient(t *testing.T, url string) (*Client, config.Splunk) {
 func TestBuildQuery(t *testing.T) {
 	c, _ := newClient(t, "http://x")
 	q, err := c.BuildQuery("prod", "abc-1")
-	if err != nil || q != `index=app "abc-1" | where x={1} NOT kong` {
+	if err != nil || q != `index=app "abc-1" | where x={1}` {
 		t.Fatalf("BuildQuery = %q, %v", q, err)
 	}
 	if _, err := c.BuildQuery("nope", "a"); !errors.Is(err, ErrUnknownEnv) {
