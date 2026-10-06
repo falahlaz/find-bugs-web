@@ -10,8 +10,8 @@ import { formatDateTime } from '@/lib/format'
 import { notify } from '@/lib/notify'
 import { JobTimeline } from './job-timeline'
 import { useCancelJob, useJob, useTimezone } from './queries'
-import { FieldLabel, ResultView, type Result } from './result-view'
-import { isFinal, isPending, statusInfo, type JobStatus, type JobView } from './status'
+import { ResultView, type Result } from './result-view'
+import { isFinal, isPending, isTrouble, statusInfo, type JobStatus, type JobView } from './status'
 import { SeverityBadge, StatusBadge } from './status-badge'
 import { TraceSection } from './trace-chat'
 import { useRerun } from './use-rerun'
@@ -116,7 +116,7 @@ function JobDetail({ id }: { id: number }) {
           {result && <SeverityBadge severity={result.severity} />}
         </div>
         <p className="text-[13px] text-muted-foreground">
-          Job #{data.id} · {data.environment} · {data.timeRange} · input {data.inputKind === 'curl' ? 'curl' : 'transaction ID'} · oleh {data.username} ·{' '}
+          #{data.id} · {data.environment} · {data.timeRange} · {data.username} ·{' '}
           {formatDateTime(data.queuedAt, tz)}
         </p>
       </div>
@@ -151,34 +151,37 @@ function JobDetail({ id }: { id: number }) {
       {header}
       <Notices job={data} />
       {errors}
-      <div className="grid items-start gap-4 @3xl:grid-cols-[250px_minmax(0,1fr)]">
-        <Card className="gap-3 py-4">
-          <CardContent className="grid gap-3 px-4">
-            <FieldLabel>Pipeline</FieldLabel>
-            <JobTimeline job={data} timeZone={tz} orientation="vertical" />
+      {!isFinal(status) && (
+        <Card className="py-4">
+          <CardContent className="px-4">
+            <JobTimeline job={data} timeZone={tz} />
           </CardContent>
         </Card>
-        <div className="grid gap-4">
-          {status === 'ANALYZING' && (
-            <Card>
-              <CardContent>
-                <AnalyzingPlaceholder />
-              </CardContent>
-            </Card>
-          )}
-          {result && (
-            <ResultView
-              result={result}
-              engineer={engineer}
-              animate={justFinished}
-              trace={engineer && result.codeTrace ? <TraceSection jobId={id} initial={result.codeTrace} /> : undefined}
-            />
-          )}
-          {!result && status !== 'ANALYZING' && isFinal(status) === false && (
-            <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Diagnosis muncul di sini setelah analisis AI selesai.</p>
-          )}
-        </div>
-      </div>
+      )}
+      {status === 'ANALYZING' && (
+        <Card>
+          <CardContent>
+            <AnalyzingPlaceholder />
+          </CardContent>
+        </Card>
+      )}
+      {result && (
+        <ResultView
+          result={result}
+          engineer={engineer}
+          animate={justFinished}
+          trace={engineer && result.codeTrace ? <TraceSection jobId={id} initial={result.codeTrace} /> : undefined}
+        />
+      )}
+      {isFinal(status) && (
+        // A finished pipeline is history; keep it one click away.
+        <details className="group rounded-lg border bg-card px-4 py-3" open={isTrouble(status)}>
+          <summary className="cursor-pointer text-sm text-muted-foreground select-none">Riwayat pipeline</summary>
+          <div className="mt-3">
+            <JobTimeline job={data} timeZone={tz} />
+          </div>
+        </details>
+      )}
     </div>
   )
 }

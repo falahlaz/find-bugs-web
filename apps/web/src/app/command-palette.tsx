@@ -53,7 +53,7 @@ function PaletteDialog() {
     }
     const actions: Item[] = [
       { key: 'new', label: 'Investigasi baru', hint: 'Form submit', icon: Plus, run: go('/') },
-      { key: 'jobs', label: 'Buka histori', hint: 'Semua job', icon: Clock, run: go('/jobs') },
+      { key: 'jobs', label: 'Daftar investigasi', hint: 'Semua job', icon: Clock, run: go('/jobs') },
       { key: 'conn', label: 'Koneksi VPN & Splunk', hint: 'Status sistem', icon: Plug, run: go('/koneksi') },
       {
         key: 'reauth',

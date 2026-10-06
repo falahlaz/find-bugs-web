@@ -24,7 +24,7 @@ function readLastEnv() {
 /** Client-side hint only; the server does the real parsing. */
 function detect(input: string): { tone: 'ok' | 'warn' | 'idle'; text: string; id?: string } {
   const v = input.trim()
-  if (!v) return { tone: 'idle', text: 'Paste transaction ID atau curl lengkap.' }
+  if (!v) return { tone: 'idle', text: 'Satu transaction ID, atau satu perintah curl dengan header X-Transaction-ID.' }
   if (/^curl\s/i.test(v)) {
     const m = v.match(/X-Transaction-ID:\s*([^\s"'\\]+)/i)
     return m ? { tone: 'ok', text: 'curl terdeteksi, ID dari header X-Transaction-ID', id: m[1] } : { tone: 'warn', text: 'curl terdeteksi, tapi header X-Transaction-ID tidak terlihat.' }
