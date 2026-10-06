@@ -787,6 +787,84 @@
         ],
         "type": "object"
       },
+      "ReportView": {
+        "properties": {
+          "date": {
+            "type": "string"
+          },
+          "endpoints": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "hasHtml": {
+            "type": "boolean"
+          },
+          "hasMd": {
+            "description": "Always false for QA",
+            "type": "boolean"
+          },
+          "repo": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "endpoints",
+          "hasHtml",
+          "hasMd",
+          "repo",
+          "slug",
+          "tags",
+          "title",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
+      "ReportsResponse": {
+        "properties": {
+          "canReadMd": {
+            "description": "Engineers read report.md and download the vault zip",
+            "type": "boolean"
+          },
+          "reports": {
+            "items": {
+              "$ref": "#/components/schemas/ReportView"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "canReadMd",
+          "reports"
+        ],
+        "type": "object"
+      },
       "ReposResponse": {
         "properties": {
           "canClone": {
@@ -2291,6 +2369,42 @@
         "summary": "Current user",
         "tags": [
           "auth"
+        ]
+      }
+    },
+    "/api/reports": {
+      "get": {
+        "operationId": "listReports",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Trace reports in KNOWLEDGE_DIR",
+        "tags": [
+          "reports"
         ]
       }
     },

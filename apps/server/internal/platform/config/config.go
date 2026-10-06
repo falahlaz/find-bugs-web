@@ -33,6 +33,9 @@ type Config struct {
 	RetainDiagnosis time.Duration
 	// RetainLogFiles keeps the per-job log files (data/logs) this long.
 	RetainLogFiles time.Duration
+	// KnowledgeDir is the trace-report knowledge base shown on the Laporan
+	// page (<dir>/<repo>/<date>-<slug>/report.{md,html}).
+	KnowledgeDir string
 
 	TransactionIDHeader string
 
@@ -281,6 +284,7 @@ func Load(full bool) (Config, error) {
 		RetainRawLogs:   time.Duration(l.int("RETENTION_RAW_LOG_DAYS", 30)) * 24 * time.Hour,
 		RetainDiagnosis: time.Duration(l.int("RETENTION_DIAGNOSIS_DAYS", 180)) * 24 * time.Hour,
 		RetainLogFiles:  time.Duration(l.int("RETENTION_LOG_FILE_DAYS", 3)) * 24 * time.Hour,
+		KnowledgeDir:    l.str("KNOWLEDGE_DIR", filepath.Join(home, "knowledge")),
 
 		TransactionIDHeader: l.str("TRANSACTION_ID_HEADER", "X-Transaction-ID"),
 

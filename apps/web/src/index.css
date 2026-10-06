@@ -185,6 +185,55 @@
   .kbd {
     @apply rounded border bg-muted px-1.5 font-mono text-[10.5px] leading-5 text-muted-foreground;
   }
+  /* report.md on the Laporan page */
+  .report-md {
+    @apply grid min-w-0 grid-cols-1 gap-3 text-sm leading-relaxed [overflow-wrap:anywhere];
+  }
+  .report-md h1 {
+    @apply text-xl font-semibold tracking-tight;
+  }
+  .report-md h2 {
+    @apply mt-4 border-b pb-1 text-lg font-semibold;
+  }
+  .report-md h3,
+  .report-md h4 {
+    @apply mt-2 font-semibold;
+  }
+  .report-md a {
+    @apply font-medium text-primary hover:underline;
+  }
+  .report-md ul {
+    @apply grid list-disc gap-1 pl-5 marker:text-muted-foreground;
+  }
+  .report-md ol {
+    @apply grid list-decimal gap-1 pl-5 marker:text-muted-foreground;
+  }
+  .report-md :not(pre) > code {
+    @apply rounded bg-muted px-1 py-0.5 font-mono text-[12.5px];
+  }
+  .report-md pre {
+    @apply overflow-auto rounded-md bg-muted px-3 py-2 font-mono text-[12.5px] leading-relaxed [overflow-wrap:normal];
+  }
+  .report-md blockquote {
+    @apply border-l-2 pl-3 text-muted-foreground;
+  }
+  .report-md table {
+    @apply w-full border-collapse text-left text-[13px];
+  }
+  .report-md th,
+  .report-md td {
+    @apply border px-2 py-1 align-top;
+  }
+  .report-md th {
+    @apply bg-muted font-semibold;
+  }
+  /* trace-report's key/value tables start with an empty "| | |" header */
+  .report-md thead:not(:has(th:not(:empty))) {
+    display: none;
+  }
+  .report-md hr {
+    @apply my-2;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

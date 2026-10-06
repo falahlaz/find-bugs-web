@@ -286,3 +286,25 @@ type RepoSessionResponse struct {
 	Repo   RepoView `json:"repo"`
 	Output string   `json:"output" doc:"What the rc-session script reported"`
 }
+
+// ReportsResponse lists the trace-report knowledge base.
+type ReportsResponse struct {
+	Reports   []ReportView `json:"reports"`
+	CanReadMD bool         `json:"canReadMd" doc:"Engineers read report.md and download the vault zip"`
+}
+
+// ReportView is one issue report from KNOWLEDGE_DIR.
+type ReportView struct {
+	Repo      string    `json:"repo"`
+	Slug      string    `json:"slug"`
+	Title     string    `json:"title"`
+	Date      string    `json:"date,omitempty"`
+	Status    string    `json:"status,omitempty"`
+	Severity  string    `json:"severity,omitempty"`
+	Summary   string    `json:"summary,omitempty"`
+	Tags      []string  `json:"tags"`
+	Endpoints []string  `json:"endpoints"`
+	HasMD     bool      `json:"hasMd" doc:"Always false for QA"`
+	HasHTML   bool      `json:"hasHtml"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
