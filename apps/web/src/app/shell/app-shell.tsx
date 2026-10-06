@@ -7,6 +7,7 @@ import { useAuth } from '../auth-context'
 import { openPalette } from '../palette-store'
 import { ThemeToggle } from '../theme-toggle'
 import { engineerNav, initials } from './nav'
+import { useHealth } from './use-health'
 import { AccountSheet, SystemBanners } from './shared'
 
 const tabs = [
@@ -15,33 +16,56 @@ const tabs = [
   { to: '/koneksi', label: 'Koneksi', icon: Plug },
 ]
 
-function RailLink({ to, label, icon: Icon, end }: { to: string; label: string; icon: typeof Inbox; end?: boolean }) {
+// The list, the composer and a job are all one place: the investigations.
+const investigating = (pathname: string) => pathname === '/' || pathname.startsWith('/jobs')
+
+function RailLink({
+  to,
+  label,
+  icon: Icon,
+  end,
+  active,
+  alert,
+}: {
+  to: string
+  label: string
+  icon: typeof Inbox
+  end?: boolean
+  active?: boolean
+  alert?: 'bad' | 'warn'
+}) {
   return (
     <NavLink
       to={to}
       end={end}
-      title={label}
-      aria-label={label}
       className={({ isActive }) =>
-        cn('grid size-10 place-items-center rounded-lg text-rail-foreground transition-colors hover:bg-white/10 hover:text-white', isActive && 'bg-white/12 text-white')
+        cn(
+          'relative grid w-[68px] justify-items-center gap-1 rounded-lg py-2 text-[10.5px] leading-none text-rail-foreground transition-colors hover:bg-white/10 hover:text-white',
+          (active ?? isActive) && 'bg-white/12 text-white',
+        )
       }
     >
       <Icon className="size-[18px]" />
+      {label}
+      {alert && <span aria-label="Ada masalah koneksi" className={cn('absolute top-1.5 right-3 size-2 rounded-full ring-2 ring-rail', alert === 'bad' ? 'bg-bad' : 'bg-warn')} />}
     </NavLink>
   )
 }
 
 /**
- * Icon rail, the job list always beside the detail pane (Sentry issues /
- * Linear inbox style), and on phones list → detail with a bottom tab bar.
+ * Labelled rail; on the investigation pages the job list sits beside the
+ * detail pane (Linear inbox style), and on phones list → detail with a
+ * bottom tab bar. Other pages get the full width.
  */
 export function AppShell({ children }: { children: ReactNode }) {
   const { user, logout } = useAuth()
   const { pathname } = useLocation()
   const [account, setAccount] = useState(false)
+  const health = useHealth()
   if (!user) return null
   const engineer = user.role === 'engineer'
-  const withList = !/^\/(users|audit)/.test(pathname)
+  const connAlert = health.vpnOk === false || health.splunkOk === false ? 'bad' : health.splunkBusy ? 'warn' : undefined
+  const withList = investigating(pathname)
   // Phones show one pane at a time: the list on /jobs, the detail elsewhere.
   const listOnly = pathname === '/jobs'
 
@@ -49,29 +73,28 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="flex h-svh flex-col">
       <SystemBanners />
       <div className="flex min-h-0 flex-1">
-        <nav aria-label="Navigasi" className="hidden w-14 shrink-0 flex-col items-center gap-1.5 bg-rail py-3 md:flex">
-          <span className="mb-2 grid size-8 place-items-center rounded-lg bg-primary font-mono text-[11px] font-semibold text-primary-foreground">FB</span>
-          {tabs.map((t) => (
-            <RailLink key={t.to} {...t} label={t.to === '/' ? 'Investigasi baru' : t.label} />
-          ))}
-          <button
-            type="button"
-            onClick={openPalette}
-            title="Cari (Ctrl K)"
-            aria-label="Cari"
-            className="grid size-10 place-items-center rounded-lg text-rail-foreground hover:bg-white/10 hover:text-white"
-          >
-            <Search className="size-[18px]" />
-          </button>
+        <nav aria-label="Navigasi" className="hidden w-[80px] shrink-0 flex-col items-center gap-1 bg-rail py-3 md:flex">
+          <span className="mb-3 grid size-8 place-items-center rounded-lg bg-primary font-mono text-[11px] font-semibold text-primary-foreground">FB</span>
+          <RailLink to="/jobs" label="Investigasi" icon={Inbox} active={investigating(pathname)} />
+          <RailLink to="/koneksi" label="Koneksi" icon={Plug} alert={connAlert} />
           {engineer && (
             <>
-              <span className="my-1.5 h-px w-6 bg-white/10" />
+              <span className="my-2 h-px w-8 bg-white/10" />
               {engineerNav.map((n) => (
-                <RailLink key={n.to} to={n.to} label={n.label} icon={n.icon} />
+                <RailLink key={n.to} to={n.to} label={n.short} icon={n.icon} />
               ))}
             </>
           )}
           <div className="mt-auto grid justify-items-center gap-2">
+            <button
+              type="button"
+              onClick={openPalette}
+              title="Cari (Ctrl K)"
+              className="grid w-[68px] justify-items-center gap-1 rounded-lg py-2 text-[10.5px] leading-none text-rail-foreground hover:bg-white/10 hover:text-white"
+            >
+              <Search className="size-[18px]" />
+              Cari
+            </button>
             <ThemeToggle className="px-2 text-rail-foreground hover:bg-white/10 [&>span]:hidden" />
             <button
               type="button"
@@ -107,7 +130,10 @@ export function AppShell({ children }: { children: ReactNode }) {
               cn('grid flex-1 place-items-center gap-0.5 rounded-lg py-1 text-[10.5px] text-muted-foreground', (isActive || (t.to === '/jobs' && pathname.startsWith('/jobs'))) && 'text-primary')
             }
           >
-            <t.icon className="size-5" />
+            <span className="relative">
+              <t.icon className="size-5" />
+              {t.to === '/koneksi' && connAlert && <span className={cn('absolute -top-0.5 -right-0.5 size-2 rounded-full', connAlert === 'bad' ? 'bg-bad' : 'bg-warn')} />}
+            </span>
             {t.label}
           </NavLink>
         ))}

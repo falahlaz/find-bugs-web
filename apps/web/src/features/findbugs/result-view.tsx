@@ -14,7 +14,7 @@ import { useTypewriter } from './use-typewriter'
 export type Result = Schemas['Result']
 
 export function FieldLabel({ children }: { children: ReactNode }) {
-  return <div className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">{children}</div>
+  return <div className="text-xs font-medium text-muted-foreground">{children}</div>
 }
 
 function Field({ label, value, mono = false, className }: { label: string; value?: string; mono?: boolean; className?: string }) {
@@ -39,8 +39,7 @@ export function Diagnosis({ result, engineer, animate = false }: { result: Resul
           <Sparkles className="size-4 text-primary" />
           <span className="font-semibold">Diagnosis AI</span>
           <SeverityBadge severity={result.severity} />
-          {result.sourceLabel && <span className="text-xs text-muted-foreground">Sumber: {result.sourceLabel}</span>}
-          {result.model && <span className="ml-auto rounded-md border px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">{result.model}</span>}
+          <span className="text-xs text-muted-foreground">{[result.sourceLabel && `Sumber: ${result.sourceLabel}`, result.model].filter(Boolean).join(' · ')}</span>
       </div>
       {result.llmFailed && <Alert tone="warning">Analisis AI gagal untuk job ini. {engineer ? 'Log mentah di bawah tetap bisa dipakai.' : ''}</Alert>}
       {result.summary && <p className={cn('max-w-[68ch] text-[15px] leading-relaxed text-pretty', !summary.done && 'caret')}>{summary.text}</p>}

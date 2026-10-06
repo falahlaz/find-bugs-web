@@ -30,5 +30,3 @@ const subscribe = (cb: () => void) => {
 
 export const useListFilters = () => useSyncExternalStore(subscribe, () => state)
 
-/** Advanced filters (not the search box or status chips) currently set. */
-export const advancedCount = (f: ListFilters) => [f.environment, f.from, f.to].filter(Boolean).length

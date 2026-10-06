@@ -2,26 +2,26 @@ import { Plus, Search, SlidersHorizontal, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, NavLink } from 'react-router'
 import { useAuth } from '@/app/auth-context'
-import { StatusDot } from '@/app/shell/shared'
-import { useHealth } from '@/app/shell/use-health'
 import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { formatShort } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { advancedCount, setListFilters, useListFilters } from './list-filters'
+import { setListFilters, useListFilters } from './list-filters'
 import { PAGE_SIZE, useEnvironments, useJobs, useTimezone, type JobFilters } from './queries'
 import { jobTone, type JobStatus } from './status'
 import { StatusBadge } from './status-badge'
 
 const stripe = { neutral: 'bg-neu', info: 'bg-info', success: 'bg-ok', warning: 'bg-warn', danger: 'bg-bad', outline: 'bg-border' } as const
 
-const chips: { label: string; status?: string }[] = [
-  { label: 'Semua' },
+const statuses: { label: string; status?: string }[] = [
+  { label: 'Semua status' },
   { label: 'Selesai', status: 'DONE' },
   { label: 'Gagal', status: 'FAILED' },
-  { label: 'Tanpa log', status: 'NO_LOGS' },
-  { label: 'Analisis', status: 'ANALYZING' },
+  { label: 'Log tidak ditemukan', status: 'NO_LOGS' },
+  { label: 'Analisis AI', status: 'ANALYZING' },
   { label: 'Antre', status: 'QUEUED' },
+  { label: 'Kedaluwarsa', status: 'EXPIRED' },
+  { label: 'Dibatalkan', status: 'CANCELLED' },
 ]
 
 function useDebounced<T>(value: T, ms: number) {
@@ -37,12 +37,11 @@ function useDebounced<T>(value: T, ms: number) {
 export function JobInbox() {
   const { user } = useAuth()
   const tz = useTimezone()
-  const health = useHealth()
   const envs = useEnvironments()
   const engineer = user?.role === 'engineer'
   const f = useListFilters()
   const mine = f.mine ?? !engineer
-  const [moreOpen, setMoreOpen] = useState(advancedCount(f) > 0)
+  const [moreOpen, setMoreOpen] = useState(false)
   const [cursors, setCursors] = useState<number[]>([])
   const search = useDebounced(f.transactionId?.trim() ?? '', 300)
 
@@ -61,40 +60,24 @@ export function JobInbox() {
   }
   const jobs = useJobs(filters, cursors.at(-1))
   const list = jobs.data ?? []
-  const advanced = advancedCount(f)
+
+  const statusLabel = statuses.find((o) => o.status === f.status)?.label
+  const active: { label: string; clear: Parameters<typeof update>[0] }[] = [
+    ...(f.status ? [{ label: statusLabel ?? f.status, clear: { status: undefined } }] : []),
+    ...(f.environment ? [{ label: f.environment, clear: { environment: undefined } }] : []),
+    ...(f.from || f.to ? [{ label: `${f.from ?? '…'} – ${f.to ?? '…'}`, clear: { from: undefined, to: undefined } }] : []),
+    ...(engineer && mine ? [{ label: 'Milik saya', clear: { mine: false } }] : []),
+  ]
 
   return (
     <>
-      <div className="flex flex-wrap gap-1.5 border-b px-2.5 py-2">
-        <Link to="/koneksi#vpn" className="flex items-center gap-1.5 rounded-md border bg-secondary px-2 py-1 text-[11.5px] text-muted-foreground hover:text-foreground">
-          <StatusDot ok={health.vpnOk} />
-          VPN <b className="font-medium text-foreground">{health.vpnOk ? 'OK' : health.vpnLabel}</b>
-        </Link>
-        <Link to="/koneksi#splunk" className="flex items-center gap-1.5 rounded-md border bg-secondary px-2 py-1 text-[11.5px] text-muted-foreground hover:text-foreground">
-          <StatusDot ok={health.splunkOk} busy={health.splunkBusy} />
-          Splunk <b className="font-medium text-foreground">{health.splunkOk ? 'OK' : health.splunkLabel}</b>
-        </Link>
-        <span className="flex items-center gap-1.5 rounded-md border bg-secondary px-2 py-1 text-[11.5px] text-muted-foreground">
-          <span className="size-2 rounded-full bg-info" aria-hidden />
-          Antrean{' '}
-          <b className="font-medium text-foreground tabular-nums">
-            {health.queue.active}/{health.queue.max}
-          </b>
-        </span>
-      </div>
-
       <div className="grid gap-2.5 border-b px-3 pt-3 pb-2.5">
         <div className="flex items-center gap-2">
           <h2 className="text-[15px] font-semibold">Investigasi</h2>
-          <span className="rounded bg-secondary px-1.5 font-mono text-[11px] text-muted-foreground tabular-nums">
+          <span className="text-xs text-muted-foreground tabular-nums">
             {list.length}
             {list.length === PAGE_SIZE ? '+' : ''}
           </span>
-          {engineer && (
-            <button type="button" onClick={() => update({ mine: !mine })} className="text-xs text-muted-foreground underline-offset-2 hover:underline">
-              {mine ? 'Milik saya' : 'Semua user'}
-            </button>
-          )}
           <Link to="/" className="ml-auto inline-flex h-7 items-center gap-1 rounded-md bg-primary px-2.5 text-xs font-medium text-primary-foreground hover:brightness-110">
             <Plus className="size-3.5" />
             Baru
@@ -115,63 +98,69 @@ export function JobInbox() {
             type="button"
             aria-expanded={moreOpen}
             onClick={() => setMoreOpen((o) => !o)}
-            title="Filter environment dan tanggal"
+            title="Filter"
             className={cn('relative grid size-[34px] shrink-0 place-items-center rounded-md border bg-card text-muted-foreground hover:text-foreground', moreOpen && 'text-foreground')}
           >
             <SlidersHorizontal className="size-4" />
-            <span className="sr-only">Filter lanjutan</span>
-            {advanced > 0 && <span className="absolute -top-1 -right-1 grid size-4 place-items-center rounded-full bg-primary text-[10px] text-primary-foreground">{advanced}</span>}
+            <span className="sr-only">Filter</span>
+            {active.length > 0 && <span className="absolute -top-1 -right-1 grid size-4 place-items-center rounded-full bg-primary text-[10px] text-primary-foreground">{active.length}</span>}
           </button>
         </div>
         {moreOpen && (
           <div className="grid animate-rise gap-2 rounded-md border bg-muted p-2.5">
-            <label className="grid gap-1 text-[11px] font-medium text-muted-foreground">
-              Environment
-              <Select className="h-8" value={f.environment ?? ''} onChange={(e) => update({ environment: e.target.value || undefined })}>
-                <option value="">Semua</option>
-                {(envs.data?.environments ?? []).map((e) => (
-                  <option key={e}>{e}</option>
-                ))}
-              </Select>
-            </label>
             <div className="grid grid-cols-2 gap-2">
-              <label className="grid gap-1 text-[11px] font-medium text-muted-foreground">
+              <label className="grid gap-1 text-xs text-muted-foreground">
+                Status
+                <Select className="h-8" value={f.status ?? ''} onChange={(e) => update({ status: e.target.value || undefined })}>
+                  {statuses.map((o) => (
+                    <option key={o.label} value={o.status ?? ''}>
+                      {o.label}
+                    </option>
+                  ))}
+                </Select>
+              </label>
+              <label className="grid gap-1 text-xs text-muted-foreground">
+                Environment
+                <Select className="h-8" value={f.environment ?? ''} onChange={(e) => update({ environment: e.target.value || undefined })}>
+                  <option value="">Semua</option>
+                  {(envs.data?.environments ?? []).map((e) => (
+                    <option key={e}>{e}</option>
+                  ))}
+                </Select>
+              </label>
+              <label className="grid gap-1 text-xs text-muted-foreground">
                 Dari
                 <Input type="date" className="h-8 text-xs" value={f.from ?? ''} onChange={(e) => update({ from: e.target.value || undefined })} />
               </label>
-              <label className="grid gap-1 text-[11px] font-medium text-muted-foreground">
+              <label className="grid gap-1 text-xs text-muted-foreground">
                 Sampai
                 <Input type="date" className="h-8 text-xs" value={f.to ?? ''} onChange={(e) => update({ to: e.target.value || undefined })} />
               </label>
             </div>
-            {advanced > 0 && (
-              <button
-                type="button"
-                onClick={() => update({ environment: undefined, from: undefined, to: undefined })}
-                className="inline-flex items-center gap-1 justify-self-start text-xs text-muted-foreground hover:text-foreground"
-              >
-                <X className="size-3.5" />
-                Hapus filter lanjutan
-              </button>
+            {engineer && (
+              <label className="flex items-center gap-2 text-xs">
+                <input type="checkbox" checked={mine} onChange={(e) => update({ mine: e.target.checked })} className="accent-primary" />
+                Hanya investigasi saya
+              </label>
             )}
           </div>
         )}
-        <div className="flex gap-1.5 overflow-x-auto [scrollbar-width:none]">
-          {chips.map((c) => (
-            <button
-              key={c.label}
-              type="button"
-              aria-pressed={f.status === c.status}
-              onClick={() => update({ status: c.status })}
-              className={cn(
-                'shrink-0 rounded-full border px-2.5 py-1 text-xs text-muted-foreground transition-colors',
-                f.status === c.status && 'border-foreground bg-foreground text-background',
-              )}
-            >
-              {c.label}
-            </button>
-          ))}
-        </div>
+        {active.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {active.map((a) => (
+              <button
+                key={a.label}
+                type="button"
+                onClick={() => update(a.clear)}
+                title="Hapus filter ini"
+                className="inline-flex items-center gap-1 rounded-full border bg-card px-2 py-0.5 text-xs hover:bg-secondary"
+              >
+                {a.label}
+                <X className="size-3 text-muted-foreground" />
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
@@ -183,7 +172,9 @@ export function JobInbox() {
             </div>
           ))}
         {jobs.error && <p className="p-4 text-sm text-bad">{jobs.error.message}</p>}
-        {!jobs.isPending && list.length === 0 && <p className="p-4 text-sm text-muted-foreground">Belum ada investigasi yang cocok.</p>}
+        {!jobs.isPending && list.length === 0 && (
+          <p className="p-4 text-sm text-muted-foreground">{active.length > 0 || search ? 'Tidak ada investigasi yang cocok dengan filter ini.' : 'Belum ada investigasi. Mulai dari tombol Baru.'}</p>
+        )}
         {list.map((j) => {
           const s = j.status as JobStatus
           return (
