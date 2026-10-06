@@ -20,6 +20,12 @@ func logFilePath(dir string, jobID int64) string {
 	return filepath.Join(dir, fmt.Sprintf("job-%d.log", jobID))
 }
 
+// RawLogFilePath is where a job's unredacted Splunk result is written, for
+// engineers to download. It is never given to the analyzer.
+func RawLogFilePath(dir string, jobID int64) string {
+	return filepath.Join(dir, fmt.Sprintf("job-%d.raw.log", jobID))
+}
+
 // writeLogFile writes every fetched event to the job's log file (dir 0700,
 // file 0600) and returns its path.
 func writeLogFile(dir string, job store.Job, res splunk.Result, linked []string) (string, error) {
@@ -27,20 +33,29 @@ func writeLogFile(dir string, job store.Job, res splunk.Result, linked []string)
 		return "", err
 	}
 	path := logFilePath(dir, job.ID)
-	if err := os.WriteFile(path, []byte(formatLogFile(job, res, linked)), 0o600); err != nil {
+	if err := os.WriteFile(path, []byte(formatLogFile(job, res, linked, true)), 0o600); err != nil {
 		return "", err
 	}
 	return path, nil
+}
+
+// writeRawLogFile writes the same events unredacted (file 0600).
+func writeRawLogFile(dir string, job store.Job, res splunk.Result, linked []string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	return os.WriteFile(RawLogFilePath(dir, job.ID), []byte(formatLogFile(job, res, linked, false)), 0o600)
 }
 
 // maxLineChars is the longest line written to the log file. Claude Code's Read
 // tool cuts longer lines, so they are wrapped instead.
 const maxLineChars = 2000
 
-// formatLogFile renders a header and one numbered, redacted block per event,
-// oldest first. JSON events are indented and long lines wrapped (after
-// redaction, which can lengthen them), so the analyzer can read every byte.
-func formatLogFile(job store.Job, res splunk.Result, linked []string) string {
+// formatLogFile renders a header and one numbered block per event, oldest
+// first, redacted when redacted is set. JSON events are indented and long
+// lines wrapped (after redaction, which can lengthen them), so the analyzer
+// can read every byte.
+func formatLogFile(job store.Job, res splunk.Result, linked []string, redacted bool) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Transaction ID: %s\nEnvironment: %s\nTime range: last %s\n", job.TransactionID, job.Environment, job.TimeRange)
 	if len(linked) > 0 {
@@ -54,7 +69,7 @@ func formatLogFile(job store.Job, res splunk.Result, linked []string) string {
 	b.WriteString("\n")
 	for i, ev := range res.Events {
 		fmt.Fprintf(&b, "#%d [%s]\n", i+1, ev.Time)
-		if meta := eventMeta(ev); meta != "" {
+		if meta := eventMeta(ev, redacted); meta != "" {
 			b.WriteString(meta)
 			b.WriteString("\n")
 		}
@@ -63,7 +78,9 @@ func formatLogFile(job store.Job, res splunk.Result, linked []string) string {
 		if strings.HasPrefix(raw, "{") && json.Indent(&out, []byte(raw), "", "  ") == nil {
 			raw = out.String()
 		}
-		raw = redact.Logs(raw, 0)
+		if redacted {
+			raw = redact.Logs(raw, 0)
+		}
 		for _, line := range strings.Split(raw, "\n") {
 			for len(line) > maxLineChars {
 				cut := maxLineChars
@@ -82,7 +99,8 @@ func formatLogFile(job store.Job, res splunk.Result, linked []string) string {
 	return b.String()
 }
 
-// PurgeLogFiles deletes job log files in dir last written before cutoff.
+// PurgeLogFiles deletes job log files (redacted and raw) in dir last written
+// before cutoff.
 func PurgeLogFiles(dir string, cutoff time.Time) (int, error) {
 	paths, err := filepath.Glob(filepath.Join(dir, "job-*.log"))
 	if err != nil {
@@ -105,12 +123,16 @@ func PurgeLogFiles(dir string, cutoff time.Time) (int, error) {
 // eventMeta renders the event's Splunk metadata as one "host=… source=…
 // sourcetype=…" line, leaving out empty fields. It names the service that
 // logged the event, which the raw event usually does not.
-func eventMeta(ev splunk.Event) string {
+func eventMeta(ev splunk.Event, redacted bool) string {
 	var parts []string
 	for _, f := range []struct{ k, v string }{{"host", ev.Host}, {"source", ev.Source}, {"sourcetype", ev.SourceType}} {
 		if v := strings.TrimSpace(f.v); v != "" {
 			parts = append(parts, f.k+"="+v)
 		}
 	}
-	return redact.Logs(strings.Join(parts, " "), 0)
+	meta := strings.Join(parts, " ")
+	if redacted {
+		meta = redact.Logs(meta, 0)
+	}
+	return meta
 }

@@ -31,6 +31,8 @@ type Config struct {
 	DedupWindow     time.Duration
 	RetainRawLogs   time.Duration
 	RetainDiagnosis time.Duration
+	// RetainLogFiles keeps the per-job log files (data/logs) this long.
+	RetainLogFiles time.Duration
 
 	TransactionIDHeader string
 
@@ -278,6 +280,7 @@ func Load(full bool) (Config, error) {
 		DedupWindow:     l.dur("DEDUP_WINDOW", 24*time.Hour),
 		RetainRawLogs:   time.Duration(l.int("RETENTION_RAW_LOG_DAYS", 30)) * 24 * time.Hour,
 		RetainDiagnosis: time.Duration(l.int("RETENTION_DIAGNOSIS_DAYS", 180)) * 24 * time.Hour,
+		RetainLogFiles:  time.Duration(l.int("RETENTION_LOG_FILE_DAYS", 3)) * 24 * time.Hour,
 
 		TransactionIDHeader: l.str("TRANSACTION_ID_HEADER", "X-Transaction-ID"),
 

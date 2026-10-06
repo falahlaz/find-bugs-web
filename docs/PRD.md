@@ -42,7 +42,7 @@ Python 3.11, asyncio, tanpa framework web, tanpa test dan CI. Pipeline: input â†
 | Modul | Nasib di website | Catatan |
 | --- | --- | --- |
 | `parser/curl_parser.py`, validasi transaction ID di `bot/handler.py` | Port ke Go | Regex `[A-Za-z0-9\-_.]{1,128}` dan deteksi curl dipindah ke layer service |
-| `scraper/splunk_api.py`, `splunk_scraper.py` | Port ke Go | Template SPL per environment dari `SPLUNK_SPL_TEMPLATES`, tambahan `" NOT kong"`, time range 24h/48h. Nama cookie di-hardcode dengan suffix port `_8008` |
+| `scraper/splunk_api.py`, `splunk_scraper.py` | Port ke Go | Template SPL per environment dari `SPLUNK_SPL_TEMPLATES` (tanpa filter `NOT kong`, karena ikut menyembunyikan log yang dibutuhkan), time range 24h/48h. Nama cookie di-hardcode dengan suffix port `_8008` |
 | `analyzer/llm_analyzer.py` | Diganti Claude Code (Haiku) | Prompt dan skema output dipertahankan: summary, error\_type, failed\_component, likely\_cause, severity, suggested\_action, relevant\_logs, error\_source |
 | `jobqueue/job_queue.py` | Port ke Go, diubah | Antrean dan status job tersimpan di SQLite |
 | `storage/database.py` | Port ke Go, diubah | `requester_chat_id` diganti user ID; tambah status job dan timestamp per tahap |

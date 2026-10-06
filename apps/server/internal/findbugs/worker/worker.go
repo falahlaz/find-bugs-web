@@ -281,6 +281,9 @@ func (w *Worker) run(parent context.Context, job store.Job) {
 	inv := store.Investigation{JobID: job.ID, RawLogSnippet: redact.Tail(logs, RawSnippetChars), RelevantLogs: []string{}, LinkedIDs: linked, Pods: repos.Pods(res.Events)}
 	log.Info("logs fetched", "events", len(res.Events), "matched", res.EventCount, "truncated", res.Truncated, "linked_ids", linked)
 	var d analyzer.Diagnosis
+	if err := writeRawLogFile(w.Cfg.LogDir, job, res, linked); err != nil {
+		log.Warn("write raw log file", "err", err)
+	}
 	path, aerr := writeLogFile(w.Cfg.LogDir, job, res, linked)
 	if aerr == nil {
 		d, aerr = w.Analyzer.Analyze(ctx, job.TransactionID, path)

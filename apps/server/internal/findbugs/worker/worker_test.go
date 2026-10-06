@@ -131,7 +131,7 @@ func TestHappyPathAndNoLogs(t *testing.T) {
 			t.Errorf("%q not redacted: %+v", leak, inv)
 		}
 	}
-	if !strings.HasSuffix(e.fake.Searches[0], "abc-1 NOT kong") {
+	if !strings.HasSuffix(e.fake.Searches[0], "abc-1") {
 		t.Errorf("search = %q", e.fake.Searches[0])
 	}
 
@@ -330,13 +330,26 @@ func TestAnalyzerReadsFullLogFile(t *testing.T) {
 		t.Errorf("events not oldest first:\n%s", text)
 	}
 
+	// The downloadable copy keeps the original values.
+	rawPath := RawLogFilePath(e.w.Cfg.LogDir, j.ID)
+	rb, err := os.ReadFile(rawPath)
+	if err != nil || !strings.Contains(string(rb), "a@b.com") || !strings.Contains(string(rb), "Events: 3") {
+		t.Errorf("raw log file: %v\n%s", err, rb)
+	}
+	if fi, err := os.Stat(rawPath); err != nil || fi.Mode().Perm() != 0o600 {
+		t.Errorf("raw log file mode: %v %v", fi, err)
+	}
+
 	old := time.Now().Add(-48 * time.Hour)
 	os.Chtimes(path, old, old)
-	if n, err := PurgeLogFiles(e.w.Cfg.LogDir, time.Now().Add(-24*time.Hour)); err != nil || n != 1 {
+	os.Chtimes(rawPath, old, old)
+	if n, err := PurgeLogFiles(e.w.Cfg.LogDir, time.Now().Add(-24*time.Hour)); err != nil || n != 2 {
 		t.Fatalf("PurgeLogFiles = %d, %v", n, err)
 	}
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		t.Errorf("log file not purged: %v", err)
+	for _, p := range []string{path, rawPath} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("log file not purged: %v", err)
+		}
 	}
 }
 
@@ -356,7 +369,7 @@ func TestFollowsLinkedBackendIDs(t *testing.T) {
 	if got := e.job(t, j.ID); got.Status != store.StatusDone {
 		t.Fatalf("job = %+v", got)
 	}
-	if len(e.fake.Searches) != 3 || !strings.HasSuffix(e.fake.Searches[1], "B-1 NOT kong") || !strings.HasSuffix(e.fake.Searches[2], "B-2 NOT kong") {
+	if len(e.fake.Searches) != 3 || !strings.HasSuffix(e.fake.Searches[1], "B-1") || !strings.HasSuffix(e.fake.Searches[2], "B-2") {
 		t.Fatalf("searches = %q", e.fake.Searches)
 	}
 	inv, err := e.st.GetInvestigation(context.Background(), j.ID)
@@ -407,7 +420,7 @@ func TestFormatLogFileEventMeta(t *testing.T) {
 		{Time: "t1", Raw: "with meta", Host: "pod-1", Source: "payment-service", SourceType: "kube:container"},
 		{Time: "t2", Raw: "no meta"},
 	}}
-	got := formatLogFile(job, res, nil)
+	got := formatLogFile(job, res, nil, true)
 	if !strings.Contains(got, "#1 [t1]\nhost=pod-1 source=payment-service sourcetype=kube:container\nwith meta\n") {
 		t.Errorf("event with metadata:\n%s", got)
 	}

@@ -1,4 +1,4 @@
-import { Code2, ExternalLink, Sparkles } from 'lucide-react'
+import { Code2, Download, ExternalLink, Sparkles } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -95,9 +95,19 @@ export function EngineerReport({ result, className }: { result: Result; classNam
   )
 }
 
-export function EngineerLogs({ result }: { result: Result }) {
+export function EngineerLogs({ result, jobId }: { result: Result; jobId?: number }) {
   return (
     <div className="grid gap-3">
+      {jobId !== undefined && (
+        <a
+          href={`/api/jobs/${jobId}/logs`}
+          download
+          className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+        >
+          <Download className="size-4" aria-hidden />
+          Download log lengkap tanpa redaksi (.log, tersimpan 3 hari)
+        </a>
+      )}
       {result.relevantLogs && result.relevantLogs.length > 0 ? (
         <LogViewer lines={result.relevantLogs} />
       ) : (
@@ -245,10 +255,13 @@ export function ResultView({
   engineer,
   animate = false,
   trace,
+  jobId,
 }: {
   result: Result
   engineer: boolean
   animate?: boolean
+  /** Enables the log file download. */
+  jobId?: number
   /** Replaces the plain code trace view (the job page adds the chat). */
   trace?: ReactNode
 }) {
@@ -266,7 +279,7 @@ export function ResultView({
           </CardHeader>
           <CardContent className="grid gap-5">
             <EngineerReport result={result} />
-            <EngineerLogs result={result} />
+            <EngineerLogs result={result} jobId={jobId} />
           </CardContent>
         </Card>
       )}
