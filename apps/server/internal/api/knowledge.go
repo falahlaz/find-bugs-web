@@ -17,11 +17,11 @@ import (
 const reportCSP = "sandbox allow-scripts allow-popups allow-modals; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; frame-ancestors 'self'; base-uri 'none'; form-action 'none'"
 
 func (a *API) registerReportRoutes() {
-	a.add(route{method: "GET", path: "/api/reports", summary: "Trace reports in KNOWLEDGE_DIR", tag: "reports", opID: "listReports",
+	a.add(route{method: "GET", path: "/api/reports", menu: store.MenuLaporan, summary: "Trace reports in KNOWLEDGE_DIR", tag: "reports", opID: "listReports",
 		resps: map[int]any{200: ReportsResponse{}}, h: a.listReports})
-	a.add(route{method: "GET", path: "/api/reports/archive.zip", summary: "Knowledge base as a zip (an Obsidian vault); ?repo= limits it to one repo", tag: "reports", roles: []string{engineer},
+	a.add(route{method: "GET", path: "/api/reports/archive.zip", menu: store.MenuLaporan, summary: "Knowledge base as a zip (an Obsidian vault); ?repo= limits it to one repo", tag: "reports", roles: []string{engineer},
 		raw: true, h: a.downloadReportsZip})
-	a.add(route{method: "GET", path: "/api/reports/{repo}/{slug}/{file}", summary: "report.html (all) or report.md (engineer); ?download=1 for an attachment", tag: "reports",
+	a.add(route{method: "GET", path: "/api/reports/{repo}/{slug}/{file}", menu: store.MenuLaporan, summary: "report.html (all) or report.md (engineer); ?download=1 for an attachment", tag: "reports",
 		raw: true, h: a.reportFile})
 }
 

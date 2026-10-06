@@ -162,6 +162,9 @@ func (a *API) openAPI() schema {
 			if len(r.roles) > 0 {
 				op["x-roles"] = r.roles
 			}
+			if r.menu != "" {
+				op["x-menu"] = r.menu
+			}
 		}
 		item, _ := paths[r.path].(schema)
 		if item == nil {

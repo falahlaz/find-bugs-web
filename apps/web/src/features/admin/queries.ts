@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { Menu } from '@/app/menus'
 import { api, unwrap, type Schemas } from '@/lib/api'
 
 export type Role = Schemas['User']['role']
@@ -10,7 +11,7 @@ export function useUsers() {
 export function useCreateUser() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (body: { username: string; password: string; role: Role }) => unwrap(await api.POST('/api/users', { body })),
+    mutationFn: async (body: { username: string; password: string; role: Role; menus?: Menu[] }) => unwrap(await api.POST('/api/users', { body })),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ['users'] }),
   })
 }
@@ -18,7 +19,7 @@ export function useCreateUser() {
 export function useUpdateUser() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, ...body }: { id: number; role?: Role; active?: boolean; password?: string }) =>
+    mutationFn: async ({ id, ...body }: { id: number; role?: Role; active?: boolean; password?: string; menus?: Menu[] }) =>
       unwrap(await api.PATCH('/api/users/{id}', { params: { path: { id } }, body })),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['users'] })

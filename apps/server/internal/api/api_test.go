@@ -338,3 +338,59 @@ func TestSPAAndOpenAPI(t *testing.T) {
 		t.Errorf("spec paths = %v", paths)
 	}
 }
+
+func TestQAMenus(t *testing.T) {
+	h := newHarness(t)
+	qa, eng := h.login("qa1"), h.login("eng")
+	var users UserListResponse
+	eng.do("GET", "/api/users", nil, &users)
+	var qaID int64
+	for _, u := range users.Users {
+		if u.Username == "qa1" {
+			qaID = u.ID
+		}
+	}
+	if code := qa.do("GET", "/api/vpn/status", nil, nil); code != 200 {
+		t.Fatalf("default qa vpn status = %d, want 200", code)
+	}
+
+	var u store.User
+	only := []store.Menu{store.MenuTools, store.MenuInvestigasi}
+	if code := eng.do("PATCH", "/api/users/"+strconv.FormatInt(qaID, 10), UpdateUserRequest{Menus: &only}, &u); code != 200 ||
+		strings.Join([]string{string(u.Menus[0]), string(u.Menus[1])}, ",") != "investigasi,tools" {
+		t.Fatalf("set menus = %d %+v", code, u)
+	}
+	// The session survives a menu change and the new menus apply at once.
+	var me SessionResponse
+	if code := qa.do("GET", "/api/me", nil, &me); code != 200 || len(me.User.Menus) != 2 {
+		t.Fatalf("me after menu change = %d %+v", code, me.User)
+	}
+	var e struct{ Code string }
+	if code := qa.do("GET", "/api/vpn/status", nil, &e); code != 403 || e.Code != "menu_forbidden" {
+		t.Errorf("vpn status without koneksi = %d %+v", code, e)
+	}
+	if code := qa.do("GET", "/api/jobs", nil, nil); code != 200 {
+		t.Errorf("jobs with investigasi = %d", code)
+	}
+	if code := qa.do("GET", "/api/system/status", nil, nil); code != 200 {
+		t.Errorf("system status is for everyone, got %d", code)
+	}
+	if code := eng.do("GET", "/api/vpn/status", nil, nil); code != 200 {
+		t.Errorf("engineer vpn status = %d", code)
+	}
+
+	bad := []store.Menu{"users"}
+	if code := eng.do("PATCH", "/api/users/"+strconv.FormatInt(qaID, 10), UpdateUserRequest{Menus: &bad}, nil); code != 400 {
+		t.Errorf("unknown menu = %d, want 400", code)
+	}
+
+	var created store.User
+	if code := eng.do("POST", "/api/users", CreateUserRequest{Username: "qa3", Password: "password123", Role: "qa", Menus: []store.Menu{store.MenuLaporan}}, &created); code != 201 ||
+		len(created.Menus) != 1 || created.Menus[0] != store.MenuLaporan {
+		t.Fatalf("create with menus = %d %+v", code, created)
+	}
+	qa3 := h.login("qa3")
+	if code := qa3.do("GET", "/api/jobs", nil, nil); code != 403 {
+		t.Errorf("qa3 jobs = %d, want 403", code)
+	}
+}

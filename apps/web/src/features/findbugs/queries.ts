@@ -35,8 +35,9 @@ export type JobFilters = {
 
 export const PAGE_SIZE = 50
 
-export function useJobs(filters: JobFilters, beforeId?: number) {
+export function useJobs(filters: JobFilters, beforeId?: number, enabled = true) {
   return useQuery({
+    enabled,
     queryKey: ['jobs', filters, beforeId],
     queryFn: async () => {
       const query: Record<string, string> = { limit: String(PAGE_SIZE) }

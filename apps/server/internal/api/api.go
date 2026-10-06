@@ -77,10 +77,12 @@ type route struct {
 	method, path, summary, tag, opID string
 	public, raw                      bool
 	roles                            []string
-	query                            []string
-	req                              any
-	resps                            map[int]any
-	h                                http.HandlerFunc
+	// menu, if set, limits a QA to users granted that menu.
+	menu  store.Menu
+	query []string
+	req   any
+	resps map[int]any
+	h     http.HandlerFunc
 }
 
 func (a *API) add(r route) { a.routes = append(a.routes, r) }
@@ -95,6 +97,9 @@ func (a *API) Handler() http.Handler {
 	mux := http.NewServeMux()
 	for _, r := range a.routes {
 		var h http.Handler = r.h
+		if r.menu != "" {
+			h = requireMenu(h, r.menu)
+		}
 		if !r.public {
 			h = a.Auth.Require(h, r.roles...)
 		}
@@ -119,6 +124,17 @@ func (a *API) OpenAPI() map[string]any {
 
 const engineer = store.RoleEngineer
 
+// requireMenu runs after Auth.Require and rejects users without menu m.
+func requireMenu(next http.Handler, m store.Menu) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !identity(r).User.HasMenu(m) {
+			httpx.Error(w, http.StatusForbidden, "menu_forbidden", "Menu ini tidak dibuka untuk akun kamu. Minta Engineer untuk mengaktifkannya.")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func (a *API) registerRoutes() {
 	ok := map[int]any{200: OKResponse{}}
 	a.add(route{method: "GET", path: "/healthz", summary: "Health check", tag: "system", opID: "health", public: true,
@@ -135,39 +151,39 @@ func (a *API) registerRoutes() {
 	a.add(route{method: "GET", path: "/api/environments", summary: "Form options", tag: "jobs", opID: "environments",
 		resps: map[int]any{200: EnvironmentsResponse{}}, h: a.environments})
 
-	a.add(route{method: "POST", path: "/api/jobs", summary: "Submit an investigation", tag: "jobs", opID: "submitJob",
+	a.add(route{method: "POST", path: "/api/jobs", menu: store.MenuInvestigasi, summary: "Submit an investigation", tag: "jobs", opID: "submitJob",
 		req: SubmitJobRequest{}, resps: map[int]any{200: SubmitJobResponse{}, 202: SubmitJobResponse{}}, h: a.submitJob})
-	a.add(route{method: "GET", path: "/api/jobs", summary: "List jobs (QA: own only)", tag: "jobs", opID: "listJobs",
+	a.add(route{method: "GET", path: "/api/jobs", menu: store.MenuInvestigasi, summary: "List jobs (QA: own only)", tag: "jobs", opID: "listJobs",
 		query: []string{"environment", "status", "transactionId", "from", "to", "beforeId", "limit", "mine"},
 		resps: map[int]any{200: JobListResponse{}}, h: a.listJobs})
-	a.add(route{method: "GET", path: "/api/jobs/{id}", summary: "Job detail and result", tag: "jobs", opID: "getJob",
+	a.add(route{method: "GET", path: "/api/jobs/{id}", menu: store.MenuInvestigasi, summary: "Job detail and result", tag: "jobs", opID: "getJob",
 		resps: map[int]any{200: JobView{}}, h: a.getJob})
-	a.add(route{method: "GET", path: "/api/jobs/{id}/logs", summary: "Download the job's Splunk log file", tag: "jobs", roles: []string{engineer},
+	a.add(route{method: "GET", path: "/api/jobs/{id}/logs", menu: store.MenuInvestigasi, summary: "Download the job's Splunk log file", tag: "jobs", roles: []string{engineer},
 		raw: true, h: a.downloadJobLogs})
-	a.add(route{method: "POST", path: "/api/jobs/{id}/cancel", summary: "Cancel a pending job", tag: "jobs", opID: "cancelJob",
+	a.add(route{method: "POST", path: "/api/jobs/{id}/cancel", menu: store.MenuInvestigasi, summary: "Cancel a pending job", tag: "jobs", opID: "cancelJob",
 		resps: map[int]any{200: JobView{}}, h: a.cancelJob})
 	a.registerTraceRoutes()
 	a.registerRepoRoutes()
 	a.registerReportRoutes()
 	a.registerToolRoutes()
 
-	a.add(route{method: "POST", path: "/api/vpn/connect", summary: "Start GlobalProtect connect", tag: "vpn", opID: "vpnConnect",
+	a.add(route{method: "POST", path: "/api/vpn/connect", menu: store.MenuKoneksi, summary: "Start GlobalProtect connect", tag: "vpn", opID: "vpnConnect",
 		resps: map[int]any{202: VPNStateResponse{}}, h: a.vpnConnect})
-	a.add(route{method: "GET", path: "/api/vpn/login-url", summary: "SAML login link once captured", tag: "vpn", opID: "vpnLoginURL",
+	a.add(route{method: "GET", path: "/api/vpn/login-url", menu: store.MenuKoneksi, summary: "SAML login link once captured", tag: "vpn", opID: "vpnLoginURL",
 		resps: map[int]any{200: LoginURLResponse{}}, h: a.vpnLoginURL})
-	a.add(route{method: "GET", path: "/saml-login", summary: "Captured SAML auto-submit page", tag: "vpn", raw: true, h: a.samlLogin})
-	a.add(route{method: "POST", path: "/api/vpn/callback", summary: "Submit the globalprotectcallback: URI", tag: "vpn", opID: "vpnCallback",
+	a.add(route{method: "GET", path: "/saml-login", menu: store.MenuKoneksi, summary: "Captured SAML auto-submit page", tag: "vpn", raw: true, h: a.samlLogin})
+	a.add(route{method: "POST", path: "/api/vpn/callback", menu: store.MenuKoneksi, summary: "Submit the globalprotectcallback: URI", tag: "vpn", opID: "vpnCallback",
 		req: CallbackRequest{}, resps: map[int]any{200: vpn.CallbackResult{}}, h: a.vpnCallback})
-	a.add(route{method: "POST", path: "/api/vpn/disconnect", summary: "Disconnect GlobalProtect", tag: "vpn", opID: "vpnDisconnect",
+	a.add(route{method: "POST", path: "/api/vpn/disconnect", menu: store.MenuKoneksi, summary: "Disconnect GlobalProtect", tag: "vpn", opID: "vpnDisconnect",
 		resps: map[int]any{200: vpn.CmdResult{}}, h: a.vpnDisconnect})
-	a.add(route{method: "GET", path: "/api/vpn/status", summary: "Live VPN status", tag: "vpn", opID: "vpnStatus",
+	a.add(route{method: "GET", path: "/api/vpn/status", menu: store.MenuKoneksi, summary: "Live VPN status", tag: "vpn", opID: "vpnStatus",
 		resps: map[int]any{200: vpn.StatusResult{}}, h: a.vpnStatus})
-	a.add(route{method: "GET", path: "/api/vpn/logs", summary: "Redacted connect log", tag: "vpn", opID: "vpnLogs",
+	a.add(route{method: "GET", path: "/api/vpn/logs", menu: store.MenuKoneksi, summary: "Redacted connect log", tag: "vpn", opID: "vpnLogs",
 		resps: map[int]any{200: LogsResponse{}}, h: a.vpnLogs})
 
-	a.add(route{method: "GET", path: "/api/splunk/status", summary: "Splunk session state", tag: "splunk", opID: "splunkStatus",
+	a.add(route{method: "GET", path: "/api/splunk/status", menu: store.MenuKoneksi, summary: "Splunk session state", tag: "splunk", opID: "splunkStatus",
 		resps: map[int]any{200: SplunkSummary{}}, h: a.splunkStatus})
-	a.add(route{method: "POST", path: "/api/splunk/reauth", summary: "Start SSO re-auth (waits for 2FA in background)", tag: "splunk", opID: "splunkReauth",
+	a.add(route{method: "POST", path: "/api/splunk/reauth", menu: store.MenuKoneksi, summary: "Start SSO re-auth (waits for 2FA in background)", tag: "splunk", opID: "splunkReauth",
 		resps: map[int]any{202: SplunkSummary{}}, h: a.splunkReauth})
 
 	a.add(route{method: "GET", path: "/api/users", summary: "List users", tag: "users", opID: "listUsers", roles: []string{engineer},
@@ -688,16 +704,24 @@ func (a *API) createUser(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadRequest, "bad_password", err.Error())
 		return
 	}
+	menus, ok := store.NormalizeMenus(req.Menus)
+	if !ok {
+		httpx.Error(w, http.StatusBadRequest, "bad_menu", "Menu tidak dikenal.")
+		return
+	}
 	u, err := a.Store.CreateUser(r.Context(), req.Username, hash, req.Role)
 	if errors.Is(err, store.ErrDuplicate) {
 		httpx.Error(w, http.StatusConflict, "duplicate", "Username sudah dipakai.")
 		return
 	}
+	if err == nil && req.Menus != nil {
+		u, err = a.Store.UpdateUser(r.Context(), u.ID, store.UserUpdate{Menus: &menus})
+	}
 	if err != nil {
 		httpx.Internal(w, r, err)
 		return
 	}
-	a.audit(r, "user.create", "ok", u.Username+" ("+u.Role+")")
+	a.audit(r, "user.create", "ok", u.Username+" ("+u.Role+")"+menuDetail(u))
 	httpx.JSON(w, http.StatusCreated, u)
 }
 
@@ -720,6 +744,14 @@ func (a *API) updateUser(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusBadRequest, "bad_role", "Role harus qa atau engineer.")
 		return
 	}
+	if req.Menus != nil {
+		menus, ok := store.NormalizeMenus(*req.Menus)
+		if !ok {
+			httpx.Error(w, http.StatusBadRequest, "bad_menu", "Menu tidak dikenal.")
+			return
+		}
+		upd.Menus = &menus
+	}
 	if req.Password != nil {
 		hash, err := auth.HashPassword(*req.Password)
 		if err != nil {
@@ -737,9 +769,12 @@ func (a *API) updateUser(w http.ResponseWriter, r *http.Request) {
 		httpx.Internal(w, r, err)
 		return
 	}
-	// Any change to role, status or password ends existing sessions.
-	if err := a.Store.DeleteUserSessions(r.Context(), id); err != nil {
-		slog.Error("delete sessions", "err", err)
+	// Any change to role, status or password ends existing sessions. Menus
+	// are checked on every request, so a menu change needs no new login.
+	if req.Role != nil || req.Active != nil || req.Password != nil {
+		if err := a.Store.DeleteUserSessions(r.Context(), id); err != nil {
+			slog.Error("delete sessions", "err", err)
+		}
 	}
 	var changes []string
 	if req.Role != nil {
@@ -751,8 +786,30 @@ func (a *API) updateUser(w http.ResponseWriter, r *http.Request) {
 	if req.Password != nil {
 		changes = append(changes, "password direset")
 	}
+	if req.Menus != nil {
+		changes = append(changes, "menu → "+menuList(u.Menus))
+	}
 	a.audit(r, "user.update", "ok", u.Username+": "+strings.Join(changes, ", "))
 	httpx.JSON(w, http.StatusOK, u)
+}
+
+func menuList(ms []store.Menu) string {
+	if len(ms) == 0 {
+		return "(tidak ada)"
+	}
+	names := make([]string, len(ms))
+	for i, m := range ms {
+		names[i] = string(m)
+	}
+	return strings.Join(names, ", ")
+}
+
+// menuDetail describes a QA's menus for the audit log.
+func menuDetail(u store.User) string {
+	if u.Role == store.RoleEngineer {
+		return ""
+	}
+	return " menu: " + menuList(u.Menus)
 }
 
 func (a *API) listAudit(w http.ResponseWriter, r *http.Request) {
