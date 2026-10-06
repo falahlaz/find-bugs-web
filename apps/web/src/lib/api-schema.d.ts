@@ -243,6 +243,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Trace reports in KNOWLEDGE_DIR */
+        get: operations["listReports"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/repos": {
         parameters: {
             query?: never;
@@ -733,6 +750,27 @@ export interface components {
             session?: components["schemas"]["RepoSessionView"] | null;
             shallow: boolean;
             subject?: string;
+        };
+        ReportView: {
+            date?: string;
+            endpoints: string[];
+            hasHtml: boolean;
+            /** @description Always false for QA */
+            hasMd: boolean;
+            repo: string;
+            severity?: string;
+            slug: string;
+            status?: string;
+            summary?: string;
+            tags: string[];
+            title: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ReportsResponse: {
+            /** @description Engineers read report.md and download the vault zip */
+            canReadMd: boolean;
+            reports: components["schemas"]["ReportView"][];
         };
         ReposResponse: {
             /** @description GitLab URL and token are set */
@@ -1414,6 +1452,35 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    listReports: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReportsResponse"];
                 };
             };
             /** @description Error */

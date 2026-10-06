@@ -145,6 +145,7 @@ func (a *API) registerRoutes() {
 		resps: map[int]any{200: JobView{}}, h: a.cancelJob})
 	a.registerTraceRoutes()
 	a.registerRepoRoutes()
+	a.registerReportRoutes()
 
 	a.add(route{method: "POST", path: "/api/vpn/connect", summary: "Start GlobalProtect connect", tag: "vpn", opID: "vpnConnect",
 		resps: map[int]any{202: VPNStateResponse{}}, h: a.vpnConnect})

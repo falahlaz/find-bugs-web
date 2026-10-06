@@ -1,4 +1,4 @@
-import { Inbox, LogOut, Plug, Plus, Search, UserRound } from 'lucide-react'
+import { FileText, Inbox, LogOut, Plug, Plus, Search, UserRound } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { NavLink, useLocation } from 'react-router'
 import { JobInbox } from '@/features/findbugs/job-inbox'
@@ -14,6 +14,7 @@ const tabs = [
   { to: '/jobs', label: 'Investigasi', icon: Inbox },
   { to: '/', label: 'Baru', icon: Plus, end: true },
   { to: '/koneksi', label: 'Koneksi', icon: Plug },
+  { to: '/laporan', label: 'Laporan', icon: FileText },
 ]
 
 // The list, the composer and a job are all one place: the investigations.
@@ -77,6 +78,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <span className="mb-3 grid size-8 place-items-center rounded-lg bg-primary font-mono text-[11px] font-semibold text-primary-foreground">FB</span>
           <RailLink to="/jobs" label="Investigasi" icon={Inbox} active={investigating(pathname)} />
           <RailLink to="/koneksi" label="Koneksi" icon={Plug} alert={connAlert} />
+          <RailLink to="/laporan" label="Laporan" icon={FileText} />
           {engineer && (
             <>
               <span className="my-2 h-px w-8 bg-white/10" />
