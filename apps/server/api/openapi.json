@@ -1200,6 +1200,216 @@
         ],
         "type": "object"
       },
+      "ToolField": {
+        "properties": {
+          "default": {
+            "type": "string"
+          },
+          "group": {
+            "type": "string"
+          },
+          "help": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/ToolOption"
+            },
+            "type": "array"
+          },
+          "placeholder": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "showIf": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ToolShowIf"
+              }
+            ],
+            "nullable": true
+          },
+          "type": {
+            "enum": [
+              "text",
+              "textarea",
+              "select",
+              "tabs",
+              "number",
+              "checkbox"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "default",
+          "group",
+          "help",
+          "label",
+          "name",
+          "placeholder",
+          "required",
+          "type"
+        ],
+        "type": "object"
+      },
+      "ToolInfo": {
+        "properties": {
+          "description": {
+            "type": "string"
+          },
+          "docs": {
+            "type": "string"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/ToolField"
+            },
+            "type": "array"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "description",
+          "docs",
+          "fields",
+          "id",
+          "name"
+        ],
+        "type": "object"
+      },
+      "ToolOption": {
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "value"
+        ],
+        "type": "object"
+      },
+      "ToolOutput": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "code",
+              "link"
+            ],
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "label",
+          "value"
+        ],
+        "type": "object"
+      },
+      "ToolResult": {
+        "properties": {
+          "outputs": {
+            "items": {
+              "$ref": "#/components/schemas/ToolOutput"
+            },
+            "type": "array"
+          },
+          "summary": {
+            "items": {
+              "$ref": "#/components/schemas/ToolSummaryItem"
+            },
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "outputs",
+          "summary",
+          "warnings"
+        ],
+        "type": "object"
+      },
+      "ToolShowIf": {
+        "properties": {
+          "equals": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string"
+          },
+          "in": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "type": "object"
+      },
+      "ToolSummaryItem": {
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "secret": {
+            "description": "Hidden until revealed",
+            "type": "boolean"
+          },
+          "value": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "value"
+        ],
+        "type": "object"
+      },
+      "ToolsResponse": {
+        "properties": {
+          "tools": {
+            "items": {
+              "$ref": "#/components/schemas/ToolInfo"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "tools"
+        ],
+        "type": "object"
+      },
       "TraceAskRequest": {
         "properties": {
           "text": {
@@ -2697,6 +2907,99 @@
         "summary": "VPN, Splunk and queue state with banners",
         "tags": [
           "system"
+        ]
+      }
+    },
+    "/api/tools": {
+      "get": {
+        "operationId": "listTools",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "MyTelkomsel support tools and their form fields",
+        "tags": [
+          "tools"
+        ]
+      }
+    },
+    "/api/tools/{tool}/run": {
+      "post": {
+        "operationId": "runTool",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tool",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": {},
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ToolResult"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Run a tool with the form values (400 bad input, 422 the tool refused)",
+        "tags": [
+          "tools"
         ]
       }
     },

@@ -5,6 +5,7 @@ import (
 
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/splunk"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/store"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/tools"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/vpn"
 )
 
@@ -308,3 +309,11 @@ type ReportView struct {
 	HasHTML   bool      `json:"hasHtml"`
 	UpdatedAt time.Time `json:"updatedAt"`
 }
+
+// ToolsResponse lists the MyTelkomsel support tools.
+type ToolsResponse struct {
+	Tools []tools.ToolInfo `json:"tools"`
+}
+
+// ToolInput is a tool's form values by field name.
+type ToolInput map[string]any

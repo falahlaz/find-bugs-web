@@ -132,7 +132,12 @@ func (a *API) openAPI() schema {
 		op := schema{"summary": r.summary, "tags": []string{r.tag}, "operationId": r.opID}
 		var params []any
 		for _, m := range pathParam.FindAllStringSubmatch(r.path, -1) {
-			params = append(params, schema{"name": m[1], "in": "path", "required": true, "schema": schema{"type": "integer", "format": "int64"}})
+			// {id} is a numeric row ID; other names ({tool}, {repo}) are strings.
+			typ := schema{"type": "string"}
+			if m[1] == "id" {
+				typ = schema{"type": "integer", "format": "int64"}
+			}
+			params = append(params, schema{"name": m[1], "in": "path", "required": true, "schema": typ})
 		}
 		for _, q := range r.query {
 			params = append(params, schema{"name": q, "in": "query", "required": false, "schema": schema{"type": "string"}})

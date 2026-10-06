@@ -38,6 +38,7 @@ import (
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/config"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/notify"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/store"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/tools"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/vpn"
 	"github.com/falahlaz/find-bugs-web/apps/server/web"
 )
@@ -166,6 +167,7 @@ func serve() error {
 			Limits: store.Limits{Total: cfg.QueueMax, PerUser: cfg.QueuePerUser}, DedupWindow: cfg.DedupWindow, Wake: wk.Wake,
 		},
 		VPN: gp, Splunk: sp, Monitor: mon, Web: webFS, Version: version, BaseCtx: ctx, LogDir: logDir(cfg),
+		Tools: tools.New(cfg.TselCiphersFile, cfg.TselPrivateKey, cfg.Location),
 	}
 	if chat != nil {
 		a.Trace = chat

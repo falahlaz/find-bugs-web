@@ -363,6 +363,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tools": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** MyTelkomsel support tools and their form fields */
+        get: operations["listTools"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tools/{tool}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run a tool with the form values (400 bad input, 422 the tool refused) */
+        post: operations["runTool"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users": {
         parameters: {
             query?: never;
@@ -860,6 +894,55 @@ export interface components {
             queue: components["schemas"]["QueueSummary"];
             splunk: components["schemas"]["SplunkSummary"];
             vpn: components["schemas"]["VPNSummary"];
+        };
+        ToolField: {
+            default: string;
+            group: string;
+            help: string;
+            label: string;
+            name: string;
+            options?: components["schemas"]["ToolOption"][];
+            placeholder: string;
+            required: boolean;
+            showIf?: components["schemas"]["ToolShowIf"] | null;
+            /** @enum {string} */
+            type: "text" | "textarea" | "select" | "tabs" | "number" | "checkbox";
+        };
+        ToolInfo: {
+            description: string;
+            docs: string;
+            fields: components["schemas"]["ToolField"][];
+            id: string;
+            name: string;
+        };
+        ToolOption: {
+            label: string;
+            value: string;
+        };
+        ToolOutput: {
+            /** @enum {string} */
+            kind: "code" | "link";
+            label: string;
+            value: string;
+        };
+        ToolResult: {
+            outputs: components["schemas"]["ToolOutput"][];
+            summary: components["schemas"]["ToolSummaryItem"][];
+            warnings: string[];
+        };
+        ToolShowIf: {
+            equals?: string;
+            field: string;
+            in?: string[];
+        };
+        ToolSummaryItem: {
+            label: string;
+            /** @description Hidden until revealed */
+            secret?: boolean;
+            value: string;
+        };
+        ToolsResponse: {
+            tools: components["schemas"]["ToolInfo"][];
         };
         TraceAskRequest: {
             text: string;
@@ -1696,6 +1779,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SystemStatus"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    listTools: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolsResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    runTool: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tool: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToolResult"];
                 };
             };
             /** @description Error */
