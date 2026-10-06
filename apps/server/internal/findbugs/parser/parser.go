@@ -31,6 +31,9 @@ func IsUserError(err error) bool {
 	return errors.As(err, &e)
 }
 
+// SprintHeader is the curl header naming the app sprint build that sent the request.
+const SprintHeader = "X-SPRINT-IDENTIFIER"
+
 // ValidTransactionID reports whether s matches the bot's transaction ID rule.
 func ValidTransactionID(s string) bool { return txnRe.MatchString(s) }
 
@@ -38,6 +41,8 @@ func ValidTransactionID(s string) bool { return txnRe.MatchString(s) }
 type Result struct {
 	TransactionID string
 	Kind          string
+	// SprintIdentifier is the curl's SprintHeader value, if present and valid.
+	SprintIdentifier string
 }
 
 // Parse accepts a transaction ID or a curl command. header is the name of the
@@ -53,7 +58,11 @@ func Parse(input, header string) (Result, error) {
 		if err != nil {
 			return Result{}, err
 		}
-		return Result{TransactionID: c.TransactionID, Kind: KindCurl}, nil
+		r := Result{TransactionID: c.TransactionID, Kind: KindCurl}
+		if s := c.Headers[strings.ToLower(SprintHeader)]; ValidTransactionID(s) {
+			r.SprintIdentifier = s
+		}
+		return r, nil
 	}
 	if !ValidTransactionID(text) {
 		return Result{}, userErr("Itu bukan transaction ID atau curl command yang valid. Paste nilai %s atau curl lengkap.", header)

@@ -27,6 +27,21 @@ function Field({ label, value, mono = false, className }: { label: string; value
   )
 }
 
+function Chips({ label, values }: { label: string; values: string[] }) {
+  return (
+    <div className="grid animate-rise gap-1.5">
+      <FieldLabel>{label}</FieldLabel>
+      <div className="flex flex-wrap gap-1.5">
+        {values.map((v) => (
+          <code key={v} className="rounded-md border bg-muted px-1.5 py-0.5 text-xs [overflow-wrap:anywhere]">
+            {v}
+          </code>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 /**
  * The AI summary, QA guidance and linked IDs. `animate` writes the summary
  * out when the result has just arrived on screen.
@@ -57,6 +72,8 @@ export function Diagnosis({ result, engineer, animate = false }: { result: Resul
           <p className="text-xs text-muted-foreground">Service mencatat transaksi ini dengan ID sendiri; log dari ID tersebut ikut dianalisis.</p>
         </div>
       )}
+      {summary.done && result.sprintIdentifier && <Chips label="Sprint" values={[result.sprintIdentifier]} />}
+      {summary.done && result.pods && result.pods.length > 0 && <Chips label="Pod" values={result.pods} />}
     </div>
   )
 }

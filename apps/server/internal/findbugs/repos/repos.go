@@ -27,15 +27,47 @@ import (
 
 // podLogPath matches the kubelet log path Splunk reports as source:
 // /var/log/pods/<namespace>_<pod>_<uid>/<container>/<n>.log
-var podLogPath = regexp.MustCompile(`^/var/log/pods/([a-z0-9]([a-z0-9-]*[a-z0-9])?)_[^/_]+_[^/]+/([a-z0-9]([a-z0-9-]*[a-z0-9])?)/[0-9]+\.log$`)
+var podLogPath = regexp.MustCompile(`^/var/log/pods/([a-z0-9]([a-z0-9-]*[a-z0-9])?)_([^/_]+)_[^/]+/([a-z0-9]([a-z0-9-]*[a-z0-9])?)/[0-9]+\.log$`)
 
 // Container returns the Kubernetes container name in a Splunk source path,
 // or "" if source is not a pod log path.
 func Container(source string) string {
 	if m := podLogPath.FindStringSubmatch(source); m != nil {
-		return m[3]
+		return m[4]
 	}
 	return ""
+}
+
+// Pod returns "<namespace>_<pod>" from a Splunk source path, or "" if
+// source is not a pod log path.
+func Pod(source string) string {
+	if m := podLogPath.FindStringSubmatch(source); m != nil {
+		return m[1] + "_" + m[3]
+	}
+	return ""
+}
+
+// Pods lists the pods that logged events, most events first (ties by name).
+func Pods(events []splunk.Event) []string {
+	n := map[string]int{}
+	var out []string
+	for _, ev := range events {
+		p := Pod(ev.Source)
+		if p == "" {
+			continue
+		}
+		if n[p] == 0 {
+			out = append(out, p)
+		}
+		n[p]++
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if n[out[i]] != n[out[j]] {
+			return n[out[i]] > n[out[j]]
+		}
+		return out[i] < out[j]
+	})
+	return out
 }
 
 // Namespace returns the Kubernetes namespace in a Splunk source path, or ""

@@ -56,6 +56,12 @@ func TestParseCurl(t *testing.T) {
 	if c, err := ParseCurl(app, "TRANSACTIONID"); err != nil || c.TransactionID != "A301261006114235093443870" || c.Method != "POST" || c.URL != "https://h/dev/api/payment/fulfillment/v2" {
 		t.Errorf("ParseCurl(app curl) = %+v, %v", c, err)
 	}
+	if r, err := Parse(`curl -H "X-SPRINT-IDENTIFIER: sprint-9-sprod-cob-app" `+app[5:], "TRANSACTIONID"); err != nil || r.SprintIdentifier != "sprint-9-sprod-cob-app" {
+		t.Errorf("Parse(app curl) sprint = %+v, %v", r, err)
+	}
+	if r, _ := Parse("abc", hdr); r.SprintIdentifier != "" {
+		t.Errorf("Parse(bare id) sprint = %q", r.SprintIdentifier)
+	}
 	r, err := Parse(`curl -H "X-Transaction-ID: abc" https://h`, hdr)
 	if err != nil || r.Kind != KindCurl || r.TransactionID != "abc" {
 		t.Errorf("Parse curl = %+v, %v", r, err)
