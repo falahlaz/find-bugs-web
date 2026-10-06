@@ -24,6 +24,7 @@ import (
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/config"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/httpx"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/store"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/tools"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/vpn"
 )
 
@@ -57,8 +58,10 @@ type API struct {
 	Trace *tracechat.Service
 	// Repos lists and clones the repos under GITLAB_REPOS_DIR; nil
 	// disables the Repo page. RC starts Remote Control sessions in them.
-	Repos   *repos.Manager
-	RC      *rcsession.Manager
+	Repos *repos.Manager
+	RC    *rcsession.Manager
+	// Tools runs the MyTelkomsel support tools; nil hides the Tools page.
+	Tools   *tools.Service
 	Web     fs.FS // React build (index.html + assets); nil in tests
 	Version string
 	// BaseCtx outlives requests (for background re-auth).
@@ -146,6 +149,7 @@ func (a *API) registerRoutes() {
 	a.registerTraceRoutes()
 	a.registerRepoRoutes()
 	a.registerReportRoutes()
+	a.registerToolRoutes()
 
 	a.add(route{method: "POST", path: "/api/vpn/connect", summary: "Start GlobalProtect connect", tag: "vpn", opID: "vpnConnect",
 		resps: map[int]any{202: VPNStateResponse{}}, h: a.vpnConnect})

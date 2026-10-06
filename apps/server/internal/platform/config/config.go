@@ -36,6 +36,10 @@ type Config struct {
 	// KnowledgeDir is the trace-report knowledge base shown on the Laporan
 	// page (<dir>/<repo>/<date>-<slug>/report.{md,html}).
 	KnowledgeDir string
+	// TselCiphersFile and TselPrivateKey are the MyTelkomsel tools' secrets
+	// (cipher passwords JSON, and the services' private.pem).
+	TselCiphersFile string
+	TselPrivateKey  string
 
 	TransactionIDHeader string
 
@@ -285,6 +289,8 @@ func Load(full bool) (Config, error) {
 		RetainDiagnosis: time.Duration(l.int("RETENTION_DIAGNOSIS_DAYS", 180)) * 24 * time.Hour,
 		RetainLogFiles:  time.Duration(l.int("RETENTION_LOG_FILE_DAYS", 3)) * 24 * time.Hour,
 		KnowledgeDir:    l.str("KNOWLEDGE_DIR", filepath.Join(home, "knowledge")),
+		TselCiphersFile: l.str("TSEL_CIPHERS_FILE", filepath.Join(home, ".config", "findbugs", "tsel-ciphers.json")),
+		TselPrivateKey:  l.str("TSEL_PRIVATE_KEY_PATH", filepath.Join(home, ".config", "findbugs", "tsel-private.pem")),
 
 		TransactionIDHeader: l.str("TRANSACTION_ID_HEADER", "X-Transaction-ID"),
 

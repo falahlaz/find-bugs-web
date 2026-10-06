@@ -1,4 +1,4 @@
-import { Clock, Database, FileText, Plug, Plus, ScrollText, Search, Users, type LucideIcon } from 'lucide-react'
+import { Clock, Database, FileText, Plug, Plus, ScrollText, Search, Users, Wrench, type LucideIcon } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { setListFilters } from '@/features/findbugs/list-filters'
@@ -56,6 +56,7 @@ function PaletteDialog() {
       { key: 'jobs', label: 'Daftar investigasi', hint: 'Semua job', icon: Clock, run: go('/jobs') },
       { key: 'conn', label: 'Koneksi VPN & Splunk', hint: 'Status sistem', icon: Plug, run: go('/koneksi') },
       { key: 'reports', label: 'Laporan trace', hint: 'Knowledge base', icon: FileText, run: go('/laporan') },
+      { key: 'tools', label: 'Tools MyTelkomsel', hint: 'Deeplink, hashsign, decrypt', icon: Wrench, run: go('/tools') },
       {
         key: 'reauth',
         label: 'Re-auth Splunk',

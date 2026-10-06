@@ -5,6 +5,7 @@ import { connectionRoutes } from '@/features/connection/routes'
 import { findbugsRoutes } from '@/features/findbugs/routes'
 import { reportsRoutes } from '@/features/reports/routes'
 import { reposRoutes } from '@/features/repos/routes'
+import { toolsRoutes } from '@/features/tools/routes'
 import { AuthProvider } from './auth'
 import { Layout } from './layout'
 import { LoginPage } from './login-page'
@@ -26,6 +27,7 @@ const router = createBrowserRouter([
       ...adminRoutes,
       ...reposRoutes,
       ...reportsRoutes,
+      ...toolsRoutes,
       { path: '*', element: <NotFound /> },
     ],
   },
