@@ -293,13 +293,18 @@
           "timezone": {
             "description": "IANA zone for displaying times",
             "type": "string"
+          },
+          "transactionIdHeader": {
+            "description": "Header carrying the transaction ID in a pasted curl",
+            "type": "string"
           }
         },
         "required": [
           "defaultTimeRange",
           "environments",
           "timeRanges",
-          "timezone"
+          "timezone",
+          "transactionIdHeader"
         ],
         "type": "object"
       },

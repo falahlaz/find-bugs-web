@@ -51,6 +51,11 @@ func TestParseCurl(t *testing.T) {
 			t.Errorf("ParseCurl(%q) err = %v", in, err)
 		}
 	}
+	// Real app curl: header name differs per deployment, ANSI-C quoted body.
+	app := `curl -X POST -H "Authorization: Bearer x.y.z" -H "TRANSACTIONID: A301261006114235093443870" -H "Content-Type: application/json; charset=UTF-8" --data $'{"amount":6000}' --compressed https://h/dev/api/payment/fulfillment/v2`
+	if c, err := ParseCurl(app, "TRANSACTIONID"); err != nil || c.TransactionID != "A301261006114235093443870" || c.Method != "POST" || c.URL != "https://h/dev/api/payment/fulfillment/v2" {
+		t.Errorf("ParseCurl(app curl) = %+v, %v", c, err)
+	}
 	r, err := Parse(`curl -H "X-Transaction-ID: abc" https://h`, hdr)
 	if err != nil || r.Kind != KindCurl || r.TransactionID != "abc" {
 		t.Errorf("Parse curl = %+v, %v", r, err)
