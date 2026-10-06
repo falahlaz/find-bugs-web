@@ -21,13 +21,14 @@ function readLastEnv() {
   }
 }
 
-/** Client-side hint only; the server does the real parsing. */
-function detect(input: string): { tone: 'ok' | 'warn' | 'idle'; text: string; id?: string } {
+/** Client-side hint only; the server does the real parsing. header is the configured transaction ID header. */
+function detect(input: string, header: string): { tone: 'ok' | 'warn' | 'idle'; text: string; id?: string } {
   const v = input.trim()
-  if (!v) return { tone: 'idle', text: 'Satu transaction ID, atau satu perintah curl dengan header X-Transaction-ID.' }
+  if (!v) return { tone: 'idle', text: `Satu transaction ID, atau satu perintah curl dengan header ${header}.` }
   if (/^curl\s/i.test(v)) {
-    const m = v.match(/X-Transaction-ID:\s*([^\s"'\\]+)/i)
-    return m ? { tone: 'ok', text: 'curl terdeteksi, ID dari header X-Transaction-ID', id: m[1] } : { tone: 'warn', text: 'curl terdeteksi, tapi header X-Transaction-ID tidak terlihat.' }
+    const name = header.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    const m = v.match(new RegExp(`(?<![\\w-])${name}:\\s*([^\\s"'\\\\]+)`, 'i'))
+    return m ? { tone: 'ok', text: `curl terdeteksi, ID dari header ${header}`, id: m[1] } : { tone: 'warn', text: `curl terdeteksi, tapi header ${header} tidak terlihat.` }
   }
   if (/\s/.test(v)) return { tone: 'warn', text: 'Ada spasi. Paste satu transaction ID atau satu perintah curl.' }
   return { tone: 'ok', text: 'Transaction ID', id: v }
@@ -69,7 +70,8 @@ export function SubmitForm() {
   // Fall back to the first environment when the remembered one is unknown.
   const envList = envs.data?.environments ?? []
   const env = envList.includes(environment) ? environment : (envList[0] ?? '')
-  const hint = detect(input)
+  const header = envs.data?.transactionIdHeader ?? 'X-Transaction-ID'
+  const hint = detect(input, header)
 
   async function send(force: boolean) {
     requestNotificationPermission()
@@ -115,7 +117,7 @@ export function SubmitForm() {
           setDuplicate(null)
         }}
         onKeyDown={onKeyDown}
-        placeholder={'TRX-8F3A21C0-7B\natau curl -H "X-Transaction-ID: …" https://…'}
+        placeholder={`TRX-8F3A21C0-7B\natau curl -H "${header}: …" https://…`}
         className="w-full resize-y rounded-lg border border-input bg-card px-3 py-2.5 font-mono text-[13px] leading-relaxed outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/40"
       />
       <p aria-live="polite" className="flex min-h-5 items-center gap-1.5 text-xs text-muted-foreground">

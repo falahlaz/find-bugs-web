@@ -589,6 +589,8 @@ export interface components {
             timeRanges: string[];
             /** @description IANA zone for displaying times */
             timezone: string;
+            /** @description Header carrying the transaction ID in a pasted curl */
+            transactionIdHeader: string;
         };
         ErrorBody: {
             code?: string;

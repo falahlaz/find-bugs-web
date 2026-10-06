@@ -27,10 +27,11 @@ type OKResponse struct {
 
 // EnvironmentsResponse feeds the submit form.
 type EnvironmentsResponse struct {
-	Environments     []string `json:"environments"`
-	TimeRanges       []string `json:"timeRanges"`
-	DefaultTimeRange string   `json:"defaultTimeRange"`
-	Timezone         string   `json:"timezone" doc:"IANA zone for displaying times"`
+	Environments        []string `json:"environments"`
+	TimeRanges          []string `json:"timeRanges"`
+	DefaultTimeRange    string   `json:"defaultTimeRange"`
+	Timezone            string   `json:"timezone" doc:"IANA zone for displaying times"`
+	TransactionIDHeader string   `json:"transactionIdHeader" doc:"Header carrying the transaction ID in a pasted curl"`
 }
 
 // SubmitJobRequest creates an investigation.

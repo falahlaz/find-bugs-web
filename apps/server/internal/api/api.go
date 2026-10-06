@@ -247,7 +247,7 @@ func (a *API) buildStatus(active int) SystemStatus {
 func (a *API) environments(w http.ResponseWriter, _ *http.Request) {
 	httpx.JSON(w, http.StatusOK, EnvironmentsResponse{
 		Environments: jobs.SortedEnvironments(a.Jobs.Environments), TimeRanges: jobs.TimeRanges, DefaultTimeRange: "24h",
-		Timezone: a.Cfg.Location.String(),
+		Timezone: a.Cfg.Location.String(), TransactionIDHeader: a.Jobs.Header,
 	})
 }
 
