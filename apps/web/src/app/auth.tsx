@@ -32,8 +32,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async logout() {
       await api.POST('/api/auth/logout')
       setCsrfToken('')
-      qc.clear()
+      // qc.clear() would also drop the ['me'] query that AuthProvider's
+      // observer is attached to; the null written afterwards lands on a new
+      // query nobody watches, so Layout never re-renders to redirect.
       qc.setQueryData(['me'], null)
+      qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'me' })
     },
   }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
