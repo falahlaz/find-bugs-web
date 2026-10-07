@@ -397,6 +397,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Claude subscription usage: 5-hour and weekly windows (refresh=1 re-probes) */
+        get: operations["claudeUsage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/users": {
         parameters: {
             query?: never;
@@ -856,6 +873,14 @@ export interface components {
             csrfToken: string;
             user: components["schemas"]["User"];
         };
+        Snapshot: {
+            /** Format: date-time */
+            checkedAt: string;
+            fiveHour?: components["schemas"]["Window"] | null;
+            sevenDay?: components["schemas"]["Window"] | null;
+            /** @description allowed, allowed_warning or rejected */
+            status: string;
+        };
         SplunkSummary: {
             /** Format: date-time */
             checkedAt: string;
@@ -1054,6 +1079,12 @@ export interface components {
             operator?: string;
             /** @enum {string} */
             state: "IDLE" | "CONNECTING" | "WAITING_CALLBACK" | "SUBMITTING" | "CONNECTED" | "FAILED";
+        };
+        Window: {
+            /** @description Percent of the window used, 0-100 */
+            percent: number;
+            /** Format: date-time */
+            resetsAt: string;
         };
     };
     responses: never;
@@ -1851,6 +1882,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ToolResult"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    claudeUsage: {
+        parameters: {
+            query?: {
+                refresh?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Snapshot"];
                 };
             };
             /** @description Error */

@@ -1057,6 +1057,39 @@
         ],
         "type": "object"
       },
+      "Snapshot": {
+        "properties": {
+          "checkedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "fiveHour": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Window"
+              }
+            ],
+            "nullable": true
+          },
+          "sevenDay": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Window"
+              }
+            ],
+            "nullable": true
+          },
+          "status": {
+            "description": "allowed, allowed_warning or rejected",
+            "type": "string"
+          }
+        },
+        "required": [
+          "checkedAt",
+          "status"
+        ],
+        "type": "object"
+      },
       "SplunkSummary": {
         "properties": {
           "checkedAt": {
@@ -1820,6 +1853,23 @@
           "checkedAt",
           "healthy",
           "state"
+        ],
+        "type": "object"
+      },
+      "Window": {
+        "properties": {
+          "percent": {
+            "description": "Percent of the window used, 0-100",
+            "type": "number"
+          },
+          "resetsAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "percent",
+          "resetsAt"
         ],
         "type": "object"
       }
@@ -3051,6 +3101,55 @@
           "tools"
         ],
         "x-menu": "tools"
+      }
+    },
+    "/api/usage": {
+      "get": {
+        "operationId": "claudeUsage",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Snapshot"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Claude subscription usage: 5-hour and weekly windows (refresh=1 re-probes)",
+        "tags": [
+          "system"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
       }
     },
     "/api/users": {

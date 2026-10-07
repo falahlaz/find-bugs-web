@@ -18,6 +18,7 @@ import (
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/repos"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/splunk"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/tracechat"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/usage"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/watchdog"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/worker"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/auth"
@@ -61,7 +62,9 @@ type API struct {
 	Repos *repos.Manager
 	RC    *rcsession.Manager
 	// Tools runs the MyTelkomsel support tools; nil hides the Tools page.
-	Tools   *tools.Service
+	Tools *tools.Service
+	// Usage reports the Claude subscription limits; nil hides the page.
+	Usage   *usage.Prober
 	Web     fs.FS // React build (index.html + assets); nil in tests
 	Version string
 	// BaseCtx outlives requests (for background re-auth).
@@ -166,6 +169,7 @@ func (a *API) registerRoutes() {
 	a.registerRepoRoutes()
 	a.registerReportRoutes()
 	a.registerToolRoutes()
+	a.registerUsageRoutes()
 
 	a.add(route{method: "POST", path: "/api/vpn/connect", menu: store.MenuKoneksi, summary: "Start GlobalProtect connect", tag: "vpn", opID: "vpnConnect",
 		resps: map[int]any{202: VPNStateResponse{}}, h: a.vpnConnect})

@@ -32,6 +32,7 @@ import (
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/repos"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/splunk"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/tracechat"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/usage"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/watchdog"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/worker"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/auth"
@@ -171,6 +172,9 @@ func serve() error {
 	}
 	if chat != nil {
 		a.Trace = chat
+	}
+	if cfg.Analyzer == "claude" {
+		a.Usage = &usage.Prober{Bin: cfg.Claude.Bin, Timeout: time.Minute, MaxAge: 5 * time.Minute, MinGap: 30 * time.Second}
 	}
 	if g.ReposDir != "" {
 		a.Repos = rm
