@@ -180,6 +180,7 @@ func (m *Monitor) CheckSplunk(ctx context.Context) bool {
 	m.st.SplunkOK, m.st.SplunkDetail, m.st.SplunkCheckedAt = false, err.Error(), time.Now()
 	m.mu.Unlock()
 	if errors.Is(err, splunk.ErrSessionExpired) || errors.Is(err, splunk.ErrNoSession) {
+		slog.Warn("splunk session expired", "err", err)
 		return m.AutoReauth(ctx)
 	}
 	slog.Warn("splunk check failed", "err", err)
@@ -219,7 +220,7 @@ func (m *Monitor) AutoReauth(ctx context.Context) bool {
 		m.pauseSplunk(ctx, "sesi Splunk kedaluwarsa")
 		return false
 	}
-	m.notify.Notify(ctx, "splunk-reauth", "🔐 Sesi Splunk kedaluwarsa, mencoba login otomatis. Approve push 2FA di HP pemilik akun Splunk (maks 5 menit).")
+	m.notify.Notify(ctx, "splunk-reauth", "🔐 Sesi Splunk kedaluwarsa, mencoba login otomatis. Kalau ada push 2FA, approve di HP pemilik akun Splunk (maks 5 menit).")
 	if err := m.Reauth(ctx); err != nil {
 		m.pauseSplunk(ctx, err.Error())
 		return false
@@ -235,6 +236,7 @@ func (m *Monitor) Reauth(ctx context.Context) error {
 	m.mu.Lock()
 	m.st.Reauthing = true
 	m.mu.Unlock()
+	start := time.Now()
 	err := m.splunk.ReAuth(ctx)
 	m.mu.Lock()
 	m.st.Reauthing = false
@@ -252,6 +254,7 @@ func (m *Monitor) Reauth(ctx context.Context) error {
 		m.mu.Unlock()
 		return err
 	}
+	slog.Info("splunk re-auth ok", "took", time.Since(start).Round(time.Second))
 	m.splunkOK(ctx)
 	return nil
 }
