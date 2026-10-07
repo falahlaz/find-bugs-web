@@ -1,4 +1,4 @@
-import { Clock, FolderGit2, Plug, Plus, ScrollText, Users, type LucideIcon } from 'lucide-react'
+import { Clock, FolderGit2, Gauge, Plug, Plus, ScrollText, Users, type LucideIcon } from 'lucide-react'
 
 export type NavItem = { to: string; label: string; short: string; icon: LucideIcon; end?: boolean }
 
@@ -12,6 +12,7 @@ export const engineerNav: NavItem[] = [
   { to: '/repos', label: 'Repo', short: 'Repo', icon: FolderGit2 },
   { to: '/users', label: 'User', short: 'User', icon: Users },
   { to: '/audit', label: 'Audit log', short: 'Audit', icon: ScrollText },
+  { to: '/usage', label: 'Pemakaian Claude', short: 'Usage', icon: Gauge },
 ]
 
 export function initials(name: string) {
