@@ -29,7 +29,7 @@ Find Bugs Web menggantikan Telegram bot `find-bugs-bot` dengan website yang berj
 | VPN | Satu sesi GlobalProtect untuk seluruh server. Siapa pun yang login website boleh Connect; sesi dipakai bersama semua user |
 | Splunk | Satu akun SSO dari `.env` (password disimpan di server). Push 2FA selalu ke HP pemilik akun |
 | Secret | File permission `600`, tanpa secret manager |
-| Retensi | Log mentah 30 hari, hasil diagnosis 6 bulan, metadata job selamanya |
+| Retensi | Log mentah 7 hari, hasil diagnosis 6 bulan, metadata job selamanya |
 | Bootstrap admin | Lewat CLI (`server user create --role engineer`) |
 | Pengguna | 4 orang; pilot 1–2 QA di Fase 2; approver cut-over @Falah |
 
@@ -150,7 +150,7 @@ Telegram bot interaktif dihentikan setelah website dipakai; yang tersisa hanya p
 | NFR-10 | Waktu tampil di `TIMEZONE` (default `Asia/Jakarta`). Target waktu proses satu job ≤ 60 detik di luar waktu antre |
 | NFR-11 | Test untuk parser, state machine VPN (pakai `fake-globalprotect.sh`), dan alur job dengan Splunk/LLM di-mock |
 | NFR-12 | Claude Code dijalankan tanpa tool (tanpa Bash, tanpa akses file), `--max-turns 1`, input lewat stdin, output JSON divalidasi terhadap skema. Auth dengan `ANTHROPIC_API_KEY`, bukan login langganan pribadi |
-| NFR-13 | Retensi: log mentah dihapus setelah 30 hari, field diagnosis setelah 6 bulan, metadata job disimpan. Job pembersihan harian |
+| NFR-13 | Retensi: log mentah dihapus setelah 7 hari, field diagnosis setelah 6 bulan, metadata job disimpan. Job pembersihan harian |
 | NFR-14 | Monitoring: endpoint `/healthz` (DB, worker, status VPN), uptime check eksternal, alert ke grup Telegram. Backup harian SQLite |
 
 ## Arsitektur target

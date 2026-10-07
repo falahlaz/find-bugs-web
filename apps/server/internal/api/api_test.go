@@ -156,8 +156,11 @@ func TestJobFlowAndRoles(t *testing.T) {
 	if qaView.Status != store.StatusDone || qaView.Result == nil || qaView.Result.Summary == "" || qaView.Result.QAMessage == "" {
 		t.Fatalf("qa view = %+v", qaView)
 	}
-	if qaView.Result.RawLogSnippet != "" || qaView.Result.LikelyCause != "" || len(qaView.Result.RelevantLogs) != 0 {
+	if qaView.Result.LikelyCause != "" || qaView.Result.ErrorType != "" || qaView.Result.CodeTrace != nil {
 		t.Errorf("qa sees engineer fields: %+v", qaView.Result)
+	}
+	if qaView.Result.RawLogSnippet == "" {
+		t.Errorf("qa misses redacted logs: %+v", qaView.Result)
 	}
 	if engView.Result == nil || engView.Result.RawLogSnippet == "" || engView.Result.ErrorType == "" {
 		t.Errorf("engineer view = %+v", engView.Result)

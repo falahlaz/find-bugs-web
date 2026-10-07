@@ -503,17 +503,18 @@ func (a *API) jobView(ctx context.Context, u store.User, j store.Job) (JobView, 
 }
 
 // shapeResult mirrors find-bugs-bot bot/formatter.py: QA gets the summary,
-// severity and a message based on the error source; engineers get everything.
+// severity, a message based on the error source and the redacted logs;
+// engineers get everything.
 func shapeResult(u store.User, j store.Job, inv store.Investigation) *Result {
 	label, msg := sourceText(inv.ErrorSource)
 	res := &Result{Summary: inv.Summary, Severity: inv.Severity, ErrorSource: inv.ErrorSource, SourceLabel: label, QAMessage: msg, LLMFailed: inv.LLMFailed, LinkedIDs: inv.LinkedIDs,
-		SprintIdentifier: j.SprintIdentifier, Pods: inv.Pods}
+		SprintIdentifier: j.SprintIdentifier, Pods: inv.Pods, RelevantLogs: inv.RelevantLogs, RawLogSnippet: inv.RawLogSnippet}
 	if inv.LLMFailed {
 		res.QAMessage = "Tim engineering sedang meninjau log secara manual dan akan menindaklanjuti."
 	}
 	if u.Role == store.RoleEngineer {
 		res.ErrorType, res.FailedComponent, res.LikelyCause = inv.ErrorType, inv.FailedComponent, inv.LikelyCause
-		res.SuggestedAction, res.RelevantLogs, res.RawLogSnippet = inv.SuggestedAction, inv.RelevantLogs, inv.RawLogSnippet
+		res.SuggestedAction = inv.SuggestedAction
 		res.Model, res.CodeTrace = inv.Model, inv.CodeTrace
 	}
 	return res
