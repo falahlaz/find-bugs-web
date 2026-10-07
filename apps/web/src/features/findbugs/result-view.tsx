@@ -95,7 +95,7 @@ export function EngineerReport({ result, className }: { result: Result; classNam
   )
 }
 
-/** The unredacted log file; the API only serves it to engineers. */
+/** The unredacted log file; the API serves it to anyone who can see the job. */
 export function LogDownload({ jobId }: { jobId: number }) {
   return (
     <a
@@ -284,17 +284,17 @@ export function ResultView({
           </CardHeader>
           <CardContent className="grid gap-5">
             <EngineerReport result={result} />
-            {jobId !== undefined && <LogDownload jobId={jobId} />}
           </CardContent>
         </Card>
       )}
-      {((result.relevantLogs && result.relevantLogs.length > 0) || result.rawLogSnippet) && (
+      {((result.relevantLogs && result.relevantLogs.length > 0) || result.rawLogSnippet || jobId !== undefined) && (
         <Card>
           <CardHeader>
-            <CardTitle>Log (sudah diredaksi)</CardTitle>
+            <CardTitle>Log</CardTitle>
           </CardHeader>
-          <CardContent>
-            <RedactedLogs result={result} />
+          <CardContent className="grid gap-4">
+            {jobId !== undefined && <LogDownload jobId={jobId} />}
+            {((result.relevantLogs && result.relevantLogs.length > 0) || result.rawLogSnippet) && <RedactedLogs result={result} />}
           </CardContent>
         </Card>
       )}

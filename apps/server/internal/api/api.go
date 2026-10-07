@@ -158,7 +158,7 @@ func (a *API) registerRoutes() {
 		resps: map[int]any{200: JobListResponse{}}, h: a.listJobs})
 	a.add(route{method: "GET", path: "/api/jobs/{id}", menu: store.MenuInvestigasi, summary: "Job detail and result", tag: "jobs", opID: "getJob",
 		resps: map[int]any{200: JobView{}}, h: a.getJob})
-	a.add(route{method: "GET", path: "/api/jobs/{id}/logs", menu: store.MenuInvestigasi, summary: "Download the job's Splunk log file", tag: "jobs", roles: []string{engineer},
+	a.add(route{method: "GET", path: "/api/jobs/{id}/logs", menu: store.MenuInvestigasi, summary: "Download the job's unredacted Splunk log file", tag: "jobs",
 		raw: true, h: a.downloadJobLogs})
 	a.add(route{method: "POST", path: "/api/jobs/{id}/cancel", menu: store.MenuInvestigasi, summary: "Cancel a pending job", tag: "jobs", opID: "cancelJob",
 		resps: map[int]any{200: JobView{}}, h: a.cancelJob})
@@ -503,8 +503,8 @@ func (a *API) jobView(ctx context.Context, u store.User, j store.Job) (JobView, 
 }
 
 // shapeResult mirrors find-bugs-bot bot/formatter.py: QA gets the summary,
-// severity, a message based on the error source and the redacted logs;
-// engineers get everything.
+// severity, a message based on the error source and the redacted logs (the
+// unredacted log file is served by downloadJobLogs); engineers get everything.
 func shapeResult(u store.User, j store.Job, inv store.Investigation) *Result {
 	label, msg := sourceText(inv.ErrorSource)
 	res := &Result{Summary: inv.Summary, Severity: inv.Severity, ErrorSource: inv.ErrorSource, SourceLabel: label, QAMessage: msg, LLMFailed: inv.LLMFailed, LinkedIDs: inv.LinkedIDs,
