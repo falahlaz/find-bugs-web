@@ -169,9 +169,18 @@ func TestJobFlowAndRoles(t *testing.T) {
 		t.Errorf("other QA can see job: %d", code)
 	}
 
-	// Only engineers download the log file; it is gone once purged.
-	if code := qa.do("GET", path+"/logs", nil, nil); code != 403 {
-		t.Errorf("qa download: %d", code)
+	// The owner QA and engineers download the log file; it is gone once purged.
+	if code := qa2.do("GET", path+"/logs", nil, nil); code != 404 {
+		t.Errorf("other qa download: %d", code)
+	}
+	qaResp, err := qa.hc.Get(h.srv.URL + path + "/logs")
+	if err != nil {
+		t.Fatal(err)
+	}
+	qaBody, _ := io.ReadAll(qaResp.Body)
+	qaResp.Body.Close()
+	if qaResp.StatusCode != 200 || !strings.Contains(string(qaBody), "ERROR boom user a@b.com") {
+		t.Errorf("qa download = %d %q", qaResp.StatusCode, qaBody)
 	}
 	resp, err := eng.hc.Get(h.srv.URL + path + "/logs")
 	if err != nil {
