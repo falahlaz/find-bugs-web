@@ -57,7 +57,7 @@ type JobView struct {
 }
 
 // Result is the diagnosis. QA users get summary, severity and error source
-// with a friendly message; engineers get every field and the raw log tail.
+// with a friendly message plus the redacted logs; engineers get every field.
 type Result struct {
 	Summary     string `json:"summary,omitempty"`
 	Severity    string `json:"severity,omitempty" enum:"low,medium,high,critical"`

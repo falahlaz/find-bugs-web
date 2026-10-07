@@ -47,7 +47,7 @@ function Chips({ label, values, children }: { label: string; values: string[]; c
  * The AI summary, QA guidance and linked IDs. `animate` writes the summary
  * out when the result has just arrived on screen.
  */
-export function Diagnosis({ result, engineer, animate = false }: { result: Result; engineer: boolean; animate?: boolean }) {
+export function Diagnosis({ result, animate = false }: { result: Result; animate?: boolean }) {
   const summary = useTypewriter(result.summary ?? '', animate)
   return (
     <div className="grid gap-3.5">
@@ -57,7 +57,7 @@ export function Diagnosis({ result, engineer, animate = false }: { result: Resul
           <SeverityBadge severity={result.severity} />
           <span className="text-xs text-muted-foreground">{[result.sourceLabel && `Sumber: ${result.sourceLabel}`, result.model].filter(Boolean).join(' · ')}</span>
       </div>
-      {result.llmFailed && <Alert tone="warning">Analisis AI gagal untuk job ini. {engineer ? 'Log mentah di bawah tetap bisa dipakai.' : ''}</Alert>}
+      {result.llmFailed && <Alert tone="warning">Analisis AI gagal untuk job ini. Log mentah di bawah tetap bisa dipakai.</Alert>}
       {result.summary && <p className={cn('max-w-[68ch] text-[15px] leading-relaxed text-pretty', !summary.done && 'caret')}>{summary.text}</p>}
       {summary.done && result.qaMessage && <p className="animate-rise rounded-lg bg-secondary px-3 py-2.5 text-[13px]">{result.qaMessage}</p>}
       {summary.done && result.linkedIds && result.linkedIds.length > 0 && (
@@ -95,19 +95,24 @@ export function EngineerReport({ result, className }: { result: Result; classNam
   )
 }
 
-export function EngineerLogs({ result, jobId }: { result: Result; jobId?: number }) {
+/** The unredacted log file; the API only serves it to engineers. */
+export function LogDownload({ jobId }: { jobId: number }) {
+  return (
+    <a
+      href={`/api/jobs/${jobId}/logs`}
+      download
+      className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+    >
+      <Download className="size-4" aria-hidden />
+      Download log lengkap tanpa redaksi (.log, tersimpan 3 hari)
+    </a>
+  )
+}
+
+/** Redacted logs, shown to every role. */
+export function RedactedLogs({ result }: { result: Result }) {
   return (
     <div className="grid gap-3">
-      {jobId !== undefined && (
-        <a
-          href={`/api/jobs/${jobId}/logs`}
-          download
-          className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-primary hover:underline"
-        >
-          <Download className="size-4" aria-hidden />
-          Download log lengkap tanpa redaksi (.log, tersimpan 3 hari)
-        </a>
-      )}
       {result.relevantLogs && result.relevantLogs.length > 0 ? (
         <LogViewer lines={result.relevantLogs} />
       ) : (
@@ -269,7 +274,7 @@ export function ResultView({
     <div className="grid gap-4">
       <Card>
         <CardContent>
-          <Diagnosis key={String(animate)} result={result} engineer={engineer} animate={animate} />
+          <Diagnosis key={String(animate)} result={result} animate={animate} />
         </CardContent>
       </Card>
       {engineer && (
@@ -279,7 +284,17 @@ export function ResultView({
           </CardHeader>
           <CardContent className="grid gap-5">
             <EngineerReport result={result} />
-            <EngineerLogs result={result} jobId={jobId} />
+            {jobId !== undefined && <LogDownload jobId={jobId} />}
+          </CardContent>
+        </Card>
+      )}
+      {((result.relevantLogs && result.relevantLogs.length > 0) || result.rawLogSnippet) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Log (sudah diredaksi)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <RedactedLogs result={result} />
           </CardContent>
         </Card>
       )}

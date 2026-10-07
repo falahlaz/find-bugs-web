@@ -285,7 +285,7 @@ func Load(full bool) (Config, error) {
 		JobTimeout:      l.dur("JOB_TIMEOUT", 15*time.Minute),
 		WatchInterval:   l.dur("WATCHDOG_INTERVAL", time.Minute),
 		DedupWindow:     l.dur("DEDUP_WINDOW", 24*time.Hour),
-		RetainRawLogs:   time.Duration(l.int("RETENTION_RAW_LOG_DAYS", 30)) * 24 * time.Hour,
+		RetainRawLogs:   time.Duration(l.int("RETENTION_RAW_LOG_DAYS", 7)) * 24 * time.Hour,
 		RetainDiagnosis: time.Duration(l.int("RETENTION_DIAGNOSIS_DAYS", 180)) * 24 * time.Hour,
 		RetainLogFiles:  time.Duration(l.int("RETENTION_LOG_FILE_DAYS", 3)) * 24 * time.Hour,
 		KnowledgeDir:    l.str("KNOWLEDGE_DIR", filepath.Join(home, "knowledge")),
