@@ -114,11 +114,11 @@ function RepoItem({
   const store = !repo.commit;
   const error = start.error ?? stop.error ?? clone.error ?? del.error;
   const starting = start.isPending ? start.variables.engine : undefined;
-  const startButton = (engine: Engine, variant?: "outline") => (
+  const startButton = (engine: Engine) => (
     <Button
       key={engine}
       size="sm"
-      variant={variant}
+      variant="outline"
       disabled={busy || !repo.commit}
       onClick={() => start.mutate({ project: repo.project, engine })}
     >
@@ -132,8 +132,8 @@ function RepoItem({
   );
 
   return (
-    <li className="grid gap-2 border-b py-3 last:border-0 sm:grid-cols-[1fr_auto] sm:items-center">
-      <div className="grid min-w-0 gap-1">
+    <li className="grid gap-3 border-b py-4 first:pt-0 last:border-0 last:pb-0 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-6">
+      <div className="grid min-w-0 gap-1.5">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-mono text-sm font-semibold break-all">
             {repo.project}
@@ -155,9 +155,8 @@ function RepoItem({
             {repo.branch || (repo.commit ? "detached" : "kosong")}
           </span>
           {store && (
-            <span>
-              Belum di-clone penuh: isinya cuma commit yang diambil tracer,
-              belum ada file untuk sesi.
+            <span title="Isinya cuma commit yang diambil tracer, belum ada file untuk sesi.">
+              Belum di-clone penuh
             </span>
           )}
           {repo.commit && (
@@ -199,10 +198,11 @@ function RepoItem({
           </p>
         )}
       </div>
-      <div className="flex flex-wrap gap-2 sm:justify-end">
+      <div className="flex flex-wrap items-center gap-2 sm:justify-end">
         {store
           ? canClone && (
               <Button
+                variant="outline"
                 size="sm"
                 disabled={busy}
                 onClick={() => clone.mutate(repo.project)}
@@ -236,14 +236,16 @@ function RepoItem({
             ) : (
               <>
                 {startButton("claude")}
-                {canAgy && startButton("agy", "outline")}
+                {canAgy && startButton("agy")}
               </>
             ))}
         {!s && (
           <Button
             variant="ghost"
-            size="sm"
-            className="text-destructive"
+            size="icon"
+            className="size-8 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+            title="Hapus repo"
+            aria-label={`Hapus repo ${repo.project}`}
             disabled={busy}
             onClick={() => {
               if (
@@ -259,7 +261,6 @@ function RepoItem({
             ) : (
               <Trash2 aria-hidden />
             )}
-            Hapus
           </Button>
         )}
       </div>
