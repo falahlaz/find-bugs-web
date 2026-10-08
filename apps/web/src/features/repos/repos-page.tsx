@@ -1,5 +1,7 @@
 import { ExternalLink, GitBranch, Loader2, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
+import antigravityLogo from "@/assets/antigravity.svg";
+import claudeLogo from "@/assets/claude.svg";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -82,6 +84,10 @@ function CloneStatus({ c }: { c: RepoClone }) {
 }
 
 const engineName: Record<Engine, string> = { claude: "Claude", agy: "agy" };
+const engineLogo: Record<Engine, string> = {
+  claude: claudeLogo,
+  agy: antigravityLogo,
+};
 
 type RepoItemProps = {
   repo: Repo;
@@ -114,22 +120,30 @@ function RepoItem({
   const store = !repo.commit;
   const error = start.error ?? stop.error ?? clone.error ?? del.error;
   const starting = start.isPending ? start.variables.engine : undefined;
-  const startButton = (engine: Engine) => (
-    <Button
-      key={engine}
-      size="sm"
-      variant="outline"
-      disabled={busy || !repo.commit}
-      onClick={() => start.mutate({ project: repo.project, engine })}
-    >
-      {starting === engine && <Loader2 className="animate-spin" aria-hidden />}
-      {starting === engine
-        ? "Menyambungkan… ±30 dtk"
-        : canAgy
-          ? `Mulai sesi ${engineName[engine]}`
-          : "Mulai sesi"}
-    </Button>
-  );
+  const startButton = (engine: Engine) => {
+    const label =
+      starting === engine
+        ? `Menyambungkan sesi ${engineName[engine]}… ±30 dtk`
+        : `Mulai sesi ${engineName[engine]}`;
+    return (
+      <Button
+        key={engine}
+        size="icon"
+        variant="outline"
+        className="size-8"
+        title={label}
+        aria-label={label}
+        disabled={busy || !repo.commit}
+        onClick={() => start.mutate({ project: repo.project, engine })}
+      >
+        {starting === engine ? (
+          <Loader2 className="animate-spin" aria-hidden />
+        ) : (
+          <img src={engineLogo[engine]} alt="" className="size-4" />
+        )}
+      </Button>
+    );
+  };
 
   return (
     <li className="grid gap-3 border-b py-4 first:pt-0 last:border-0 last:pb-0 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-6">
