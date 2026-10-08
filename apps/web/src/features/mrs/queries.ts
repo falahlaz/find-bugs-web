@@ -20,21 +20,27 @@ export function useMRs(state: MRState) {
   })
 }
 
-export function useMRComments(mr: MR, enabled: boolean) {
-  return useQuery({
+export function mrCommentsQuery(mr: MR) {
+  return {
     queryKey: ['mrs', 'comments', mrKey(mr)],
     queryFn: async () => unwrap(await api.GET('/api/mrs/{project}/{iid}/comments', { params: mrPath(mr) })),
-    enabled,
-  })
+  }
+}
+
+export function useMRComments(mr: MR, enabled: boolean) {
+  return useQuery({ ...mrCommentsQuery(mr), enabled })
+}
+
+export function mrConflictsQuery(mr: MR) {
+  return {
+    queryKey: ['mrs', 'conflicts', mrKey(mr)],
+    queryFn: async () => unwrap(await api.GET('/api/mrs/{project}/{iid}/conflicts', { params: mrPath(mr) })),
+    retry: false,
+  }
 }
 
 export function useMRConflicts(mr: MR, enabled: boolean) {
-  return useQuery({
-    queryKey: ['mrs', 'conflicts', mrKey(mr)],
-    queryFn: async () => unwrap(await api.GET('/api/mrs/{project}/{iid}/conflicts', { params: mrPath(mr) })),
-    enabled,
-    retry: false,
-  })
+  return useQuery({ ...mrConflictsQuery(mr), enabled })
 }
 
 /** Merges one MR; the caller refetches the list when done. */
