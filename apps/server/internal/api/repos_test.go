@@ -62,7 +62,7 @@ func TestRepos(t *testing.T) {
 		}
 		time.Sleep(20 * time.Millisecond)
 	}
-	if r := list.Repos[0]; r.Project != "grp/svc" || r.Branch != "main" || r.Subject != "first" || r.Session != nil || !list.CanClone || !list.CanSession {
+	if r := list.Repos[0]; r.Project != "grp/svc" || r.Branch != "main" || r.Subject != "first" || r.Session != nil || !list.CanClone || !list.CanSession || list.CanAgySession {
 		t.Fatalf("list = %+v", list)
 	}
 	if code := eng.do("POST", "/api/repos", RepoRequest{Project: "grp/svc"}, nil); code != 409 {
@@ -93,6 +93,25 @@ func TestRepos(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(filepath.Join(dir, ".fake-log")); !strings.Contains(string(b), "args: start "+filepath.Join(dir, "grp", "svc")+"\n") {
 		t.Fatalf("script log:\n%s", b)
+	}
+	if code := eng.do("POST", "/api/repos/session/start", RepoSessionRequest{Project: "grp/svc", Engine: "codex"}, nil); code != 400 {
+		t.Fatalf("start with an unknown engine = %d", code)
+	}
+	// No agy on this server.
+	if code := eng.do("POST", "/api/repos/session/start", RepoSessionRequest{Project: "grp/svc", Engine: "agy"}, nil); code != 404 {
+		t.Fatalf("start agy without agy = %d", code)
+	}
+	agy := filepath.Join(root, "agy")
+	os.WriteFile(agy, []byte("#!/bin/sh\n"), 0o755)
+	h.api.RC = rcsession.New(rcsession.Config{Script: script, AgyBin: agy, Root: dir, Tmux: tmux})
+	if code := eng.do("POST", "/api/repos/session/start", RepoSessionRequest{Project: "grp/svc", Engine: "agy"}, &sr); code != 200 {
+		t.Fatalf("start agy = %d %+v", code, sr)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, ".fake-log")); !strings.Contains(string(b), "args: start "+filepath.Join(dir, "grp", "svc")+" --agy\n") {
+		t.Fatalf("agy script log:\n%s", b)
+	}
+	if eng.do("GET", "/api/repos", nil, &list); !list.CanAgySession {
+		t.Fatal("canAgySession should be set when agy is installed")
 	}
 	if code := eng.do("POST", "/api/repos/session/stop", RepoRequest{Project: "grp/svc"}, &sr); code != 200 {
 		t.Fatalf("stop = %d %+v", code, sr)

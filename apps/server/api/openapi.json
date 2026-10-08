@@ -982,6 +982,25 @@
         ],
         "type": "object"
       },
+      "RepoSessionRequest": {
+        "properties": {
+          "engine": {
+            "description": "Default claude",
+            "enum": [
+              "claude",
+              "agy"
+            ],
+            "type": "string"
+          },
+          "project": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "type": "object"
+      },
       "RepoSessionResponse": {
         "properties": {
           "output": {
@@ -1000,6 +1019,13 @@
       },
       "RepoSessionView": {
         "properties": {
+          "engine": {
+            "enum": [
+              "claude",
+              "agy"
+            ],
+            "type": "string"
+          },
           "name": {
             "description": "tmux session name",
             "type": "string"
@@ -1009,11 +1035,12 @@
             "type": "string"
           },
           "url": {
-            "description": "claude.ai link once connected",
+            "description": "claude.ai or antigravity link once connected",
             "type": "string"
           }
         },
         "required": [
+          "engine",
           "name",
           "since"
         ],
@@ -1137,6 +1164,10 @@
       },
       "ReposResponse": {
         "properties": {
+          "canAgySession": {
+            "description": "agy (Antigravity CLI) sessions can be started too",
+            "type": "boolean"
+          },
           "canClone": {
             "description": "GitLab URL and token are set",
             "type": "boolean"
@@ -1164,6 +1195,7 @@
           }
         },
         "required": [
+          "canAgySession",
           "canClone",
           "canSession",
           "clones",
@@ -3341,7 +3373,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/RepoRequest"
+                "$ref": "#/components/schemas/RepoSessionRequest"
               }
             }
           },
@@ -3374,7 +3406,7 @@
             "session": []
           }
         ],
-        "summary": "Start a Claude Remote Control session in a repo",
+        "summary": "Start a Remote Control session (Claude or agy) in a repo",
         "tags": [
           "repos"
         ],

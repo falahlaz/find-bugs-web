@@ -12,6 +12,12 @@ esac
 case "$*" in *"--json-schema {"*"--sandbox --disable-slash-commands --print "*) ;; *) echo "flags missing" >&2; exit 3 ;; esac
 case "$*" in *"Only use the view_file tool"*"Transaction ID: abc-1"*) ;; *) echo "prompt missing" >&2; exit 4 ;; esac
 grep -q "ERROR 504" logs.txt || { echo "logs.txt missing" >&2; exit 5; }
+# A throwaway HOME, signed in, with the locked-down settings.
+cfg="$HOME/.gemini/antigravity-cli"
+case "$HOME" in "$PWD"*) echo "HOME inside the model's directory" >&2; exit 6 ;; esac
+[ "$(cat "$cfg/antigravity-oauth-token")" = "x-antigravity-oauth-token" ] || { echo "token missing" >&2; exit 8; }
+grep -q '"read_file(/home/)"' "$cfg/settings.json" && grep -q '"command(\*)"' "$cfg/settings.json" || { echo "settings missing" >&2; exit 9; }
+[ -n "$FAKE_AGY_HOMES" ] && echo "$HOME" >> "$FAKE_AGY_HOMES"
 d='{"summary":"ESB timeout","error_type":"504","failed_component":"esb","likely_cause":"c","severity":"high","suggested_action":"a","relevant_logs":["#1 [t] ERROR 504"],"error_source":"esb"}'
 if [ "$FAKE_AGY" = text ]; then
 	printf '{"conversation_id":"%s","status":"SUCCESS","response":%s}\n' "$id" "$(printf '%s' "$d" | sed 's/"/\\"/g; s/^/"/; s/$/"/')"

@@ -2,7 +2,6 @@ package analyzer
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -64,11 +63,11 @@ func TestClaudeCode(t *testing.T) {
 func TestAntigravity(t *testing.T) {
 	bin, _ := filepath.Abs("testdata/fake-agy.sh")
 	state := t.TempDir()
-	id := "0c271faf-538b-4bea-a942-3e2be6132bc7"
-	os.MkdirAll(filepath.Join(state, "conversations", id), 0o755)
-	os.MkdirAll(filepath.Join(state, "brain", id), 0o755)
-	os.WriteFile(filepath.Join(state, "conversations", id+".db"), []byte("logs"), 0o600)
-	os.WriteFile(filepath.Join(state, "conversations", "other.db"), []byte("keep"), 0o600)
+	for _, f := range agyAuthFiles {
+		os.WriteFile(filepath.Join(state, f), []byte("x-"+f), 0o600)
+	}
+	homes := filepath.Join(t.TempDir(), "homes")
+	t.Setenv("FAKE_AGY_HOMES", homes)
 	a := Antigravity{Bin: bin, Model: "gemini-x", Timeout: 2 * time.Second, StateDir: state}
 	ctx := context.Background()
 	for _, mode := range []string{"", "text"} {
@@ -78,13 +77,15 @@ func TestAntigravity(t *testing.T) {
 			t.Fatalf("mode %q: Analyze = %+v, %v", mode, d, err)
 		}
 	}
-	for _, p := range []string{"conversations/" + id + ".db", "conversations/" + id, "brain/" + id} {
-		if _, err := os.Stat(filepath.Join(state, p)); err == nil {
-			t.Errorf("%s was not deleted", p)
+	// The throwaway HOME the fake ran with is gone.
+	used, _ := os.ReadFile(homes)
+	for _, h := range strings.Fields(string(used)) {
+		if _, err := os.Stat(h); err == nil {
+			t.Errorf("HOME %s was not removed", h)
 		}
 	}
-	if _, err := os.Stat(filepath.Join(state, "conversations", "other.db")); err != nil {
-		t.Error("another conversation was deleted")
+	if len(strings.Fields(string(used))) != 2 {
+		t.Fatalf("homes used = %q", used)
 	}
 	for _, mode := range []string{"error", "garbage", "timeout", "crash"} {
 		t.Setenv("FAKE_AGY", mode)
@@ -94,27 +95,16 @@ func TestAntigravity(t *testing.T) {
 			t.Errorf("error = %v", err)
 		}
 	}
+	os.Remove(filepath.Join(state, "antigravity-oauth-token"))
+	t.Setenv("FAKE_AGY", "")
+	if _, err := a.Analyze(ctx, "abc-1", writeLogs(t, "#1 [t] ERROR 504\n")); err == nil || !strings.Contains(err.Error(), "not signed in") {
+		t.Errorf("without a token: %v", err)
+	}
 	p := AntigravityPrompt("abc-1", 10)
 	for _, claudeOnly := range []string{"Grep", "Glob", "Read tool", "offset/limit"} {
 		if strings.Contains(p, claudeOnly) {
 			t.Errorf("agy prompt still mentions %q", claudeOnly)
 		}
-	}
-}
-
-func TestCheckAgyPermissions(t *testing.T) {
-	p := filepath.Join(t.TempDir(), "settings.json")
-	if err := CheckAgyPermissions(p); err == nil {
-		t.Error("a missing settings file should fail")
-	}
-	os.WriteFile(p, []byte(`{"permissions":{"deny":["command(*)"]}}`), 0o600)
-	if err := CheckAgyPermissions(p); err == nil || !strings.Contains(err.Error(), "read_url(*)") {
-		t.Errorf("incomplete deny list = %v", err)
-	}
-	b, _ := json.Marshal(map[string]any{"permissions": map[string]any{"deny": AgyRequiredDeny}})
-	os.WriteFile(p, b, 0o600)
-	if err := CheckAgyPermissions(p); err != nil {
-		t.Errorf("full deny list = %v", err)
 	}
 }
 

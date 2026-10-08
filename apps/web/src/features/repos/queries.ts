@@ -28,8 +28,18 @@ export function useCloneRepo() {
   return useRepoMutation(async (project) => unwrap(await api.POST('/api/repos', { body: { project } })))
 }
 
+export type Engine = 'claude' | 'agy'
+
 export function useStartSession() {
-  return useRepoMutation(async (project) => unwrap(await api.POST('/api/repos/session/start', { body: { project } })))
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ project, engine }: { project: string; engine: Engine }) =>
+      unwrap(await api.POST('/api/repos/session/start', { body: { project, engine } })),
+    onSettled: () => {
+      void qc.invalidateQueries({ queryKey: ['repos'] })
+      void qc.invalidateQueries({ queryKey: ['audit'] })
+    },
+  })
 }
 
 export function useStopSession() {
