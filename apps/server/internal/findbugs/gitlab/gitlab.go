@@ -206,36 +206,64 @@ func (c *Client) Branches(ctx context.Context, project, search string) ([]Branch
 }
 
 func (c *Client) get(ctx context.Context, path string, q url.Values, v any) error {
+	return c.do(ctx, http.MethodGet, path, q, v)
+}
+
+// do sends one API request; q is the query string, or the form body for a
+// PUT or POST. A JSON response is decoded into v when v is not nil.
+func (c *Client) do(ctx context.Context, method, path string, q url.Values, v any) error {
 	u := c.base + "/api/v4" + path
-	if len(q) > 0 {
-		u += "?" + q.Encode()
+	var body io.Reader
+	if method == http.MethodGet {
+		if len(q) > 0 {
+			u += "?" + q.Encode()
+		}
+	} else if len(q) > 0 {
+		body = strings.NewReader(q.Encode())
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, method, u, body)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("PRIVATE-TOKEN", c.token)
+	if body != nil {
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
 	resp, err := c.http.Do(req)
 	if err != nil {
 		return fmt.Errorf("gitlab: %s", redact.Sensitive(err.Error()))
 	}
 	defer resp.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
 	if err != nil {
 		return fmt.Errorf("gitlab: %w", err)
 	}
 	switch {
 	case resp.StatusCode == http.StatusNotFound:
 		return fmt.Errorf("gitlab %s: %w", path, ErrNotFound)
-	case resp.StatusCode != http.StatusOK:
-		msg := strings.TrimSpace(string(body))
+	case resp.StatusCode < 200 || resp.StatusCode > 299:
+		msg := strings.TrimSpace(string(data))
 		if len(msg) > 200 {
 			msg = msg[:200]
 		}
-		return fmt.Errorf("gitlab %s: HTTP %d: %s", path, resp.StatusCode, redact.Sensitive(msg))
+		return &StatusError{Path: path, Code: resp.StatusCode, Msg: redact.Sensitive(msg)}
 	}
-	if err := json.Unmarshal(body, v); err != nil {
+	if v == nil {
+		return nil
+	}
+	if err := json.Unmarshal(data, v); err != nil {
 		return fmt.Errorf("gitlab %s: %w", path, err)
 	}
 	return nil
+}
+
+// StatusError is a GitLab reply with an unexpected HTTP status.
+type StatusError struct {
+	Path string
+	Code int
+	Msg  string
+}
+
+func (e *StatusError) Error() string {
+	return fmt.Sprintf("gitlab %s: HTTP %d: %s", e.Path, e.Code, e.Msg)
 }

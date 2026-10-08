@@ -1,4 +1,4 @@
-import { Clock, Database, FileText, Gauge, Plug, Plus, ScrollText, Search, Users, Wrench, type LucideIcon } from 'lucide-react'
+import { Clock, Database, FileText, Gauge, GitMerge, Plug, Plus, ScrollText, Search, Users, Wrench, type LucideIcon } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { setListFilters } from '@/features/findbugs/list-filters'
@@ -76,6 +76,7 @@ function PaletteDialog() {
       actions.push(
         { key: 'users', label: 'Kelola user', hint: 'Engineer', icon: Users, run: go('/users') },
         { key: 'audit', label: 'Audit log', hint: 'Engineer', icon: ScrollText, run: go('/audit') },
+        { key: 'mrs', label: 'MR Triage', hint: 'Engineer', icon: GitMerge, run: go('/mrs') },
         { key: 'usage', label: 'Pemakaian Claude', hint: 'Engineer', icon: Gauge, run: go('/usage') },
       )
     }

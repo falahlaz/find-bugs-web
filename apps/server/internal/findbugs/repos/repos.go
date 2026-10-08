@@ -598,6 +598,60 @@ func (m *Manager) describe(ctx context.Context, project, dir string) Repo {
 	return r
 }
 
+// ErrNotCloned is returned by MergeConflicts for a project that has no
+// repo under Dir.
+var ErrNotCloned = errors.New("repo belum di-clone")
+
+// MergeConflicts fetches the source and target branches of a merge request
+// into the project's repo under Dir and returns the files that conflict
+// when source is merged into target, without touching the working tree:
+// git merge-tree merges in memory. A shallow repo (a tracing store) is
+// unshallowed first, since the merge needs the common ancestor.
+func (m *Manager) MergeConflicts(ctx context.Context, project, source, target string) ([]string, error) {
+	if !validProject(project) {
+		return nil, fmt.Errorf("invalid GitLab project %q", project)
+	}
+	for _, b := range []string{source, target} {
+		if !refName.MatchString(b) || strings.Contains(b, "..") {
+			return nil, fmt.Errorf("invalid branch %q", b)
+		}
+	}
+	dir := filepath.Join(m.cfg.Dir, filepath.FromSlash(project))
+	if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
+		return nil, ErrNotCloned
+	}
+	defer m.lock(project)()
+	// Fetch by URL into a namespace of our own: tracing stores have no
+	// origin remote, and the refs of a working clone stay untouched.
+	const ns = "refs/mr-triage/"
+	args := []string{"fetch", "--quiet", "--no-tags", "--force"}
+	if out, err := m.git(ctx, dir, "rev-parse", "--is-shallow-repository"); err == nil && strings.TrimSpace(out) == "true" {
+		args = append(args, "--unshallow")
+	}
+	args = append(args, m.cfg.URL+"/"+project+".git",
+		"refs/heads/"+source+":"+ns+"source", "refs/heads/"+target+":"+ns+"target")
+	if _, err := m.gitTimeout(ctx, m.cfg.CloneTimeout, dir, args...); err != nil {
+		return nil, err
+	}
+	out, err := m.git(ctx, dir, "merge-tree", "--write-tree", "--name-only", "--no-messages", ns+"target", ns+"source")
+	var exit *exec.ExitError
+	switch {
+	case err == nil:
+		return []string{}, nil
+	case !errors.As(err, &exit) || exit.ExitCode() != 1:
+		return nil, err
+	}
+	// Exit 1: the tree OID, then one conflicted path per line.
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	files := []string{}
+	for _, l := range lines[1:] {
+		if l != "" {
+			files = append(files, l)
+		}
+	}
+	return files, nil
+}
+
 // ErrExists is returned by Clone when the project is already under Dir.
 var ErrExists = errors.New("repo sudah ada")
 
@@ -675,7 +729,9 @@ func (m *Manager) gitTimeout(ctx context.Context, timeout time.Duration, dir str
 		if ctx.Err() == context.DeadlineExceeded {
 			return "", fmt.Errorf("git %s timed out after %s", args[0], timeout)
 		}
-		return "", fmt.Errorf("git %s: %w: %s", args[0], err, m.scrub(strings.TrimSpace(stderr.String())))
+		// stdout is kept for commands that report through the exit code
+		// (merge-tree).
+		return stdout.String(), fmt.Errorf("git %s: %w: %s", args[0], err, m.scrub(strings.TrimSpace(stderr.String())))
 	}
 	return stdout.String(), nil
 }

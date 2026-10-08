@@ -320,3 +320,67 @@ type ToolsResponse struct {
 
 // ToolInput is a tool's form values by field name.
 type ToolInput map[string]any
+
+// MRTriageResponse is the GitLab token owner's merge requests sorted the
+// way the mymrs CLI did. An MR with conflicts and comments is in both.
+type MRTriageResponse struct {
+	Author   string   `json:"author" doc:"Only MRs whose title has | author | are listed"`
+	Ready    []MRView `json:"ready" doc:"Approved, no conflicts, no comments"`
+	Waiting  []MRView `json:"waiting" doc:"No conflicts or comments, still short of approvals"`
+	Conflict []MRView `json:"conflict"`
+	Comments []MRView `json:"comments"`
+	Drafts   []MRView `json:"drafts"`
+	Others   []MRView `json:"others" doc:"Merged and closed MRs (state=all only)"`
+}
+
+// MRView is one merge request.
+type MRView struct {
+	ProjectID    int64           `json:"projectId"`
+	IID          int64           `json:"iid"`
+	Project      string          `json:"project" doc:"group/project"`
+	Title        string          `json:"title"`
+	State        string          `json:"state" enum:"opened,merged,closed,locked"`
+	Draft        bool            `json:"draft"`
+	HasConflicts bool            `json:"hasConflicts"`
+	MergeStatus  string          `json:"mergeStatus,omitempty" doc:"GitLab detailed_merge_status; checking/unchecked means hasConflicts may be stale"`
+	Notes        int             `json:"notes" doc:"User comment count"`
+	Source       string          `json:"source"`
+	Target       string          `json:"target"`
+	WebURL       string          `json:"webUrl"`
+	UpdatedAt    time.Time       `json:"updatedAt"`
+	Approvals    *MRApprovalView `json:"approvals,omitempty" doc:"Absent when it could not be read or the MR is not open"`
+	Repo         *RepoView       `json:"repo,omitempty" doc:"The project's repo under GITLAB_REPOS_DIR, if cloned"`
+}
+
+// MRApprovalView is the approval state of a merge request.
+type MRApprovalView struct {
+	Approved   bool     `json:"approved"`
+	Required   int      `json:"required"`
+	Left       int      `json:"left"`
+	ApprovedBy []string `json:"approvedBy"`
+}
+
+// MRCommentsResponse lists the unresolved threads of a merge request.
+type MRCommentsResponse struct {
+	Comments []MRCommentView `json:"comments"`
+}
+
+// MRCommentView is the first note of an unresolved thread.
+type MRCommentView struct {
+	Path    string `json:"path,omitempty" doc:"Empty for a general thread"`
+	Line    int    `json:"line,omitempty"`
+	Author  string `json:"author"`
+	Body    string `json:"body" doc:"Markdown"`
+	Replies int    `json:"replies"`
+}
+
+// MRConflictsResponse lists the files that conflict when the source branch
+// is merged into the target.
+type MRConflictsResponse struct {
+	Files []string `json:"files"`
+}
+
+// MRMergeResponse is a merged merge request.
+type MRMergeResponse struct {
+	MR MRView `json:"mr"`
+}

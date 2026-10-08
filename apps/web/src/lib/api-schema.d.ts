@@ -243,6 +243,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/mrs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The GitLab token owner's MRs: Ready / Conflicts / Comments / Drafts (state=all adds merged and closed) */
+        get: operations["listMRs"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mrs/{project}/{iid}/comments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Unresolved comment threads of an MR */
+        get: operations["mrComments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mrs/{project}/{iid}/conflicts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Files that conflict, from a merge in the repo under GITLAB_REPOS_DIR */
+        get: operations["mrConflicts"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mrs/{project}/{iid}/merge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Merge an MR that is still ready and remove its source branch */
+        post: operations["mergeMR"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reports": {
         parameters: {
             query?: never;
@@ -753,6 +821,76 @@ export interface components {
         };
         LogsResponse: {
             lines: string[];
+        };
+        MRApprovalView: {
+            approved: boolean;
+            approvedBy: string[];
+            /** Format: int64 */
+            left: number;
+            /** Format: int64 */
+            required: number;
+        };
+        MRCommentView: {
+            author: string;
+            /** @description Markdown */
+            body: string;
+            /** Format: int64 */
+            line?: number;
+            /** @description Empty for a general thread */
+            path?: string;
+            /** Format: int64 */
+            replies: number;
+        };
+        MRCommentsResponse: {
+            comments: components["schemas"]["MRCommentView"][];
+        };
+        MRConflictsResponse: {
+            files: string[];
+        };
+        MRMergeResponse: {
+            mr: components["schemas"]["MRView"];
+        };
+        MRTriageResponse: {
+            /** @description Only MRs whose title has | author | are listed */
+            author: string;
+            comments: components["schemas"]["MRView"][];
+            conflict: components["schemas"]["MRView"][];
+            drafts: components["schemas"]["MRView"][];
+            /** @description Merged and closed MRs (state=all only) */
+            others: components["schemas"]["MRView"][];
+            /** @description Approved, no conflicts, no comments */
+            ready: components["schemas"]["MRView"][];
+            /** @description No conflicts or comments, still short of approvals */
+            waiting: components["schemas"]["MRView"][];
+        };
+        MRView: {
+            /** @description Absent when it could not be read or the MR is not open */
+            approvals?: components["schemas"]["MRApprovalView"] | null;
+            draft: boolean;
+            hasConflicts: boolean;
+            /** Format: int64 */
+            iid: number;
+            /** @description GitLab detailed_merge_status; checking/unchecked means hasConflicts may be stale */
+            mergeStatus?: string;
+            /**
+             * Format: int64
+             * @description User comment count
+             */
+            notes: number;
+            /** @description group/project */
+            project: string;
+            /** Format: int64 */
+            projectId: number;
+            /** @description The project's repo under GITLAB_REPOS_DIR, if cloned */
+            repo?: components["schemas"]["RepoView"] | null;
+            source: string;
+            /** @enum {string} */
+            state: "opened" | "merged" | "closed" | "locked";
+            target: string;
+            title: string;
+            /** Format: date-time */
+            updatedAt: string;
+            webUrl: string;
         };
         OKResponse: {
             ok: boolean;
@@ -1572,6 +1710,133 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SessionResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    listMRs: {
+        parameters: {
+            query?: {
+                state?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MRTriageResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    mrComments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project: string;
+                iid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MRCommentsResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    mrConflicts: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project: string;
+                iid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MRConflictsResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    mergeMR: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project: string;
+                iid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MRMergeResponse"];
                 };
             };
             /** @description Error */
