@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/jobs"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/mrtriage"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/rcsession"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/repos"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/splunk"
@@ -63,6 +64,9 @@ type API struct {
 	RC    *rcsession.Manager
 	// Tools runs the MyTelkomsel support tools; nil hides the Tools page.
 	Tools *tools.Service
+	// MRs triages the GitLab token owner's merge requests; nil hides the
+	// MR Triage page.
+	MRs *mrtriage.Service
 	// Usage reports the Claude subscription limits; nil hides the page.
 	Usage   *usage.Prober
 	Web     fs.FS // React build (index.html + assets); nil in tests
@@ -170,6 +174,7 @@ func (a *API) registerRoutes() {
 	a.registerReportRoutes()
 	a.registerToolRoutes()
 	a.registerUsageRoutes()
+	a.registerMRRoutes()
 
 	a.add(route{method: "POST", path: "/api/vpn/connect", menu: store.MenuKoneksi, summary: "Start GlobalProtect connect", tag: "vpn", opID: "vpnConnect",
 		resps: map[int]any{202: VPNStateResponse{}}, h: a.vpnConnect})

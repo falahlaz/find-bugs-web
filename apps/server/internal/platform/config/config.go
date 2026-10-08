@@ -40,6 +40,9 @@ type Config struct {
 	// (cipher passwords JSON, and the services' private.pem).
 	TselCiphersFile string
 	TselPrivateKey  string
+	// MRTriageAuthor is the name tag "| <author> |" in the MR titles the MR
+	// Triage page lists.
+	MRTriageAuthor string
 
 	TransactionIDHeader string
 
@@ -291,6 +294,7 @@ func Load(full bool) (Config, error) {
 		KnowledgeDir:    l.str("KNOWLEDGE_DIR", filepath.Join(home, "knowledge")),
 		TselCiphersFile: l.str("TSEL_CIPHERS_FILE", filepath.Join(home, ".config", "findbugs", "tsel-ciphers.json")),
 		TselPrivateKey:  l.str("TSEL_PRIVATE_KEY_PATH", filepath.Join(home, ".config", "findbugs", "tsel-private.pem")),
+		MRTriageAuthor:  l.str("MR_TRIAGE_AUTHOR", "Falah"),
 
 		TransactionIDHeader: l.str("TRANSACTION_ID_HEADER", "X-Transaction-ID"),
 

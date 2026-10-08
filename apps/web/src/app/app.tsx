@@ -4,6 +4,7 @@ import { ApiError } from '@/lib/api'
 import { adminRoutes } from '@/features/admin/routes'
 import { connectionRoutes } from '@/features/connection/routes'
 import { findbugsRoutes } from '@/features/findbugs/routes'
+import { mrsRoutes } from '@/features/mrs/routes'
 import { reportsRoutes } from '@/features/reports/routes'
 import { reposRoutes } from '@/features/repos/routes'
 import { toolsRoutes } from '@/features/tools/routes'
@@ -33,6 +34,7 @@ const router = createBrowserRouter([
       ...connectionRoutes,
       ...adminRoutes,
       ...reposRoutes,
+      ...mrsRoutes,
       ...reportsRoutes,
       ...toolsRoutes,
       { path: '*', element: <NotFound /> },

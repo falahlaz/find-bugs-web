@@ -28,6 +28,7 @@ import (
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/configrepo"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/gitlab"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/jobs"
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/mrtriage"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/rcsession"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/repos"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/splunk"
@@ -123,13 +124,15 @@ func serve() error {
 		URL: g.URL, Username: g.Username, Token: g.Token, CAFile: g.CAFile, SkipTLSVerify: g.SkipTLSVerify,
 		Dir: g.ReposDir, Group: g.Group, RepoMap: g.RepoMap, Ref: g.Ref, Timeout: g.Timeout, CloneTimeout: g.CloneTimeout,
 	})
+	var gl *gitlab.Client
+	if g.CanClone() {
+		if gl, err = gitlab.New(gitlab.Config{URL: g.URL, Token: g.Token, CAFile: g.CAFile, SkipTLSVerify: g.SkipTLSVerify}); err != nil {
+			return err
+		}
+	}
 	if g.Enabled() {
 		wk.Repos = rm
 		wk.Tracer = tracer
-		gl, err := gitlab.New(gitlab.Config{URL: g.URL, Token: g.Token, CAFile: g.CAFile, SkipTLSVerify: g.SkipTLSVerify})
-		if err != nil {
-			return err
-		}
 		wk.Deploys = gl
 		chat = tracechat.New(st, tracer, rm, gl, tracechat.Config{
 			GitLabURL: g.URL, Envs: config.Environments(g.EnvMap), Idle: g.SessionIdle, Retention: g.SessionRetention,
@@ -172,6 +175,9 @@ func serve() error {
 	}
 	if chat != nil {
 		a.Trace = chat
+	}
+	if gl != nil {
+		a.MRs = &mrtriage.Service{GL: gl, Author: cfg.MRTriageAuthor}
 	}
 	if cfg.Analyzer == "claude" {
 		a.Usage = &usage.Prober{Bin: cfg.Claude.Bin, Timeout: time.Minute, MaxAge: 5 * time.Minute, MinGap: 30 * time.Second}

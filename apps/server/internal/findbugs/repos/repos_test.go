@@ -2,6 +2,7 @@ package repos
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -323,5 +324,64 @@ func TestSparseConfig(t *testing.T) {
 	}
 	if err := m.FetchBranches(ctx, "grp/ops/cfg", []string{"--upload-pack=x"}); err == nil {
 		t.Fatal("no error for an option-like branch")
+	}
+}
+
+func TestMergeConflicts(t *testing.T) {
+	root := t.TempDir()
+	remote := filepath.Join(root, "gitlab")
+	work := filepath.Join(root, "work")
+	git(t, root, "init", "-q", "--bare", "-b", "main", filepath.Join(remote, "grp", "svc.git"))
+	git(t, root, "clone", "-q", filepath.Join(remote, "grp", "svc.git"), work)
+	write := func(name, body string) {
+		if err := os.WriteFile(filepath.Join(work, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("a.txt", "base\n")
+	write("b.txt", "base\n")
+	git(t, work, "add", ".")
+	git(t, work, "commit", "-q", "-m", "base")
+	git(t, work, "push", "-q", "origin", "HEAD:main")
+	git(t, work, "checkout", "-q", "-b", "feat/clash")
+	write("a.txt", "feature\n")
+	git(t, work, "commit", "-q", "-am", "feature")
+	git(t, work, "push", "-q", "origin", "feat/clash")
+	git(t, work, "checkout", "-q", "-b", "feat/clean", "main")
+	write("c.txt", "new\n")
+	git(t, work, "add", ".")
+	git(t, work, "commit", "-q", "-m", "clean")
+	git(t, work, "push", "-q", "origin", "feat/clean")
+	git(t, work, "checkout", "-q", "main")
+	write("a.txt", "main\n")
+	git(t, work, "commit", "-q", "-am", "main moved")
+	git(t, work, "push", "-q", "origin", "main")
+
+	dir := filepath.Join(root, "repos")
+	m := New(Config{URL: "file://" + remote, Dir: dir, Group: "grp"})
+	ctx := context.Background()
+	if _, err := m.MergeConflicts(ctx, "grp/svc", "feat/clash", "main"); !errors.Is(err, ErrNotCloned) {
+		t.Fatalf("not cloned err = %v", err)
+	}
+	// A shallow tracing store is unshallowed for the merge base.
+	if _, err := m.Sync(ctx, "svc", "main"); err != nil {
+		t.Fatal(err)
+	}
+	store := filepath.Join(dir, "grp", "svc")
+	if git(t, store, "rev-parse", "--is-shallow-repository") != "true" {
+		t.Fatal("store not shallow")
+	}
+	files, err := m.MergeConflicts(ctx, "grp/svc", "feat/clash", "main")
+	if err != nil || len(files) != 1 || files[0] != "a.txt" {
+		t.Fatalf("clash = %v, %v", files, err)
+	}
+	if files, err := m.MergeConflicts(ctx, "grp/svc", "feat/clean", "main"); err != nil || len(files) != 0 {
+		t.Fatalf("clean = %v, %v", files, err)
+	}
+	if _, err := m.MergeConflicts(ctx, "grp/svc", "--upload-pack=x", "main"); err == nil {
+		t.Fatal("option-like branch accepted")
+	}
+	if _, err := m.MergeConflicts(ctx, "grp/svc", "missing", "main"); err == nil {
+		t.Fatal("missing branch accepted")
 	}
 }
