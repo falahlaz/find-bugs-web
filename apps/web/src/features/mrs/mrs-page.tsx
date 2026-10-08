@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowRight, ExternalLink, Loader2, RefreshCw } from 'lucide-react'
+import { ArrowRight, Check, ClipboardCopy, ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { Alert } from '@/components/ui/alert'
@@ -13,7 +13,8 @@ import { useTimezone } from '@/features/findbugs/queries'
 import { useCloneRepo, useStartSession } from '@/features/repos/queries'
 import { formatDateTime, formatShort } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { mrKey, useMergeMR, useMRComments, useMRConflicts, useMRs, type MR, type MRState } from './queries'
+import { sessionPrompt } from './prompt'
+import { mrCommentsQuery, mrConflictsQuery, mrKey, useMergeMR, useMRComments, useMRConflicts, useMRs, type MR, type MRState } from './queries'
 
 // GitLab statuses under which has_conflicts may be out of date.
 const staleStatus = new Set(['checking', 'unchecked', 'preparing', 'approvals_syncing'])
@@ -137,13 +138,72 @@ function CloneButton({ mr, onChanged }: { mr: MR; onChanged: () => void }) {
   )
 }
 
+function SessionPrompt({ mr }: { mr: MR }) {
+  const qc = useQueryClient()
+  const [text, setText] = useState<string>()
+  const [busy, setBusy] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  async function copy(value: string) {
+    try {
+      await navigator.clipboard.writeText(value)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    } catch {
+      /* clipboard unavailable (http or denied); the text stays selectable */
+    }
+  }
+
+  async function prepare() {
+    setBusy(true)
+    try {
+      const [comments, conflicts] = await Promise.allSettled([
+        mr.notes > 0 ? qc.fetchQuery(mrCommentsQuery(mr)) : Promise.resolve({ comments: [] }),
+        mr.hasConflicts ? qc.fetchQuery(mrConflictsQuery(mr)) : Promise.resolve({ files: [] }),
+      ])
+      const t = sessionPrompt(mr, {
+        comments: comments.status === 'fulfilled' ? comments.value.comments : [],
+        files: conflicts.status === 'fulfilled' ? conflicts.value.files : undefined,
+        conflictError: conflicts.status === 'rejected' ? String((conflicts.reason as Error)?.message ?? conflicts.reason) : undefined,
+      })
+      setText(t)
+      await copy(t)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <>
+      <Button size="sm" variant="outline" disabled={busy} onClick={() => void prepare()} title="Prompt berisi MR, branch, file konflik dan komentar, untuk ditempel di sesi Claude">
+        {busy ? <Loader2 className="animate-spin" aria-hidden /> : copied ? <Check aria-hidden /> : <ClipboardCopy aria-hidden />}
+        {copied ? 'Prompt tersalin' : text ? 'Salin ulang prompt' : 'Salin prompt sesi'}
+      </Button>
+      {text && (
+        <div className="grid basis-full gap-1">
+          <p className="text-xs text-muted-foreground">Tempel ke sesi Claude sebagai pesan pertama. Claude akan berhenti sebelum push.</p>
+          <textarea
+            readOnly
+            value={text}
+            rows={10}
+            onFocus={(e) => e.currentTarget.select()}
+            className="w-full resize-y rounded-md border bg-muted/40 p-2 font-mono text-xs"
+          />
+        </div>
+      )}
+    </>
+  )
+}
+
 /**
- * Conflict tools for an open MR. GitLab-flagged conflicts get the full set
- * (file list, RC session, or clone); other MRs with a cloned repo get a local
- * check, since GitLab's has_conflicts can be stale.
+ * Tools for an open MR. One with conflicts or comments gets an RC session in
+ * its repo plus a ready prompt (or a clone button when the repo is missing);
+ * GitLab-flagged conflicts also get the file list. A clean MR with a cloned
+ * repo gets a local conflict check, since GitLab's has_conflicts can be stale.
  */
-function ConflictTools({ mr, onChanged }: { mr: MR; onChanged: () => void }) {
-  if (!mr.hasConflicts) {
+function WorkTools({ mr, onChanged }: { mr: MR; onChanged: () => void }) {
+  const needsWork = mr.hasConflicts || mr.notes > 0
+  if (!needsWork) {
     if (!mr.repo) return null
     return (
       <div className="flex flex-wrap items-center gap-2">
@@ -156,7 +216,8 @@ function ConflictTools({ mr, onChanged }: { mr: MR; onChanged: () => void }) {
       {mr.repo ? (
         <>
           <SessionButton mr={mr} onChanged={onChanged} />
-          <ConflictFiles mr={mr} label="Cek file konflik" />
+          <SessionPrompt mr={mr} />
+          <ConflictFiles mr={mr} label={mr.hasConflicts ? 'Cek file konflik' : 'Cek konflik lokal'} />
         </>
       ) : (
         <CloneButton mr={mr} onChanged={onChanged} />
@@ -218,7 +279,7 @@ function MRRow({ mr, status, onMerge, onChanged }: { mr: MR; status?: MergeStatu
       </div>
       {status?.state === 'error' && <p className="text-sm text-destructive break-words">{status.message}</p>}
       {showComments && <CommentsList mr={mr} />}
-      {open && <ConflictTools mr={mr} onChanged={onChanged} />}
+      {open && <WorkTools mr={mr} onChanged={onChanged} />}
     </li>
   )
 }
