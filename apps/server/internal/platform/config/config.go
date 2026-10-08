@@ -52,6 +52,11 @@ type Config struct {
 
 	Analyzer string // "claude" or "fake"
 	Claude   Claude
+	// LogAnalyzer picks who diagnoses the Splunk logs when Analyzer is
+	// "claude": "claude" or "antigravity". Code tracing and RC sessions
+	// always use Claude.
+	LogAnalyzer string
+	Agy         Agy
 
 	GitLab GitLab
 
@@ -103,6 +108,18 @@ type Claude struct {
 	Bin     string
 	Model   string
 	Timeout time.Duration
+}
+
+// Agy configures the Antigravity CLI log analyzer.
+type Agy struct {
+	Bin     string
+	Model   string
+	Timeout time.Duration
+	// StateDir is agy's state directory; its settings.json must deny the
+	// tools in analyzer.AgyRequiredDeny.
+	StateDir string
+	// Fallback re-runs a failed agy diagnosis with Claude.
+	Fallback bool
 }
 
 // GitLab configures code tracing: cloning service repos from GitLab so the
@@ -304,6 +321,14 @@ func Load(full bool) (Config, error) {
 			Model:   l.str("CLAUDE_MODEL", "claude-haiku-4-5-20251001"),
 			Timeout: l.dur("CLAUDE_TIMEOUT", 5*time.Minute),
 		},
+		LogAnalyzer: l.str("LOG_ANALYZER", "claude"),
+		Agy: Agy{
+			Bin:      l.str("AGY_BIN", filepath.Join(home, ".local", "bin", "agy")),
+			Model:    l.str("AGY_MODEL", "gemini-3.8-flash-medium"),
+			Timeout:  l.dur("AGY_TIMEOUT", 4*time.Minute),
+			StateDir: l.str("AGY_STATE_DIR", filepath.Join(home, ".gemini", "antigravity-cli")),
+			Fallback: l.bool("AGY_FALLBACK", true),
+		},
 
 		TelegramToken:  l.str("TELEGRAM_BOT_TOKEN", ""),
 		TelegramChatID: l.str("TELEGRAM_CHAT_ID", ""),
@@ -415,6 +440,9 @@ func Load(full bool) (Config, error) {
 		}
 		if c.Analyzer != "claude" && c.Analyzer != "fake" {
 			l.errs = append(l.errs, "ANALYZER must be claude or fake")
+		}
+		if c.LogAnalyzer != "claude" && c.LogAnalyzer != "antigravity" {
+			l.errs = append(l.errs, "LOG_ANALYZER must be claude or antigravity")
 		}
 		if c.GitLab.Enabled() && c.GitLab.CAFile != "" {
 			if _, err := os.Stat(c.GitLab.CAFile); err != nil {

@@ -2,6 +2,7 @@ package analyzer
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -57,6 +58,77 @@ func TestClaudeCode(t *testing.T) {
 		if _, err := c.Analyze(ctx, "abc-1", writeLogs(t, "x")); err == nil {
 			t.Errorf("mode %s should fail", mode)
 		}
+	}
+}
+
+func TestAntigravity(t *testing.T) {
+	bin, _ := filepath.Abs("testdata/fake-agy.sh")
+	state := t.TempDir()
+	id := "0c271faf-538b-4bea-a942-3e2be6132bc7"
+	os.MkdirAll(filepath.Join(state, "conversations", id), 0o755)
+	os.MkdirAll(filepath.Join(state, "brain", id), 0o755)
+	os.WriteFile(filepath.Join(state, "conversations", id+".db"), []byte("logs"), 0o600)
+	os.WriteFile(filepath.Join(state, "conversations", "other.db"), []byte("keep"), 0o600)
+	a := Antigravity{Bin: bin, Model: "gemini-x", Timeout: 2 * time.Second, StateDir: state}
+	ctx := context.Background()
+	for _, mode := range []string{"", "text"} {
+		t.Setenv("FAKE_AGY", mode)
+		d, err := a.Analyze(ctx, "abc-1", writeLogs(t, "#1 [t] ERROR 504\n"))
+		if err != nil || d.Summary != "ESB timeout" || d.ErrorSource != "esb" || len(d.RelevantLogs) != 1 || d.Model != "gemini-x" {
+			t.Fatalf("mode %q: Analyze = %+v, %v", mode, d, err)
+		}
+	}
+	for _, p := range []string{"conversations/" + id + ".db", "conversations/" + id, "brain/" + id} {
+		if _, err := os.Stat(filepath.Join(state, p)); err == nil {
+			t.Errorf("%s was not deleted", p)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(state, "conversations", "other.db")); err != nil {
+		t.Error("another conversation was deleted")
+	}
+	for _, mode := range []string{"error", "garbage", "timeout", "crash"} {
+		t.Setenv("FAKE_AGY", mode)
+		if _, err := a.Analyze(ctx, "abc-1", writeLogs(t, "#1 [t] ERROR 504\n")); err == nil {
+			t.Errorf("mode %s should fail", mode)
+		} else if mode == "error" && !strings.Contains(err.Error(), "quota exhausted") {
+			t.Errorf("error = %v", err)
+		}
+	}
+	p := AntigravityPrompt("abc-1", 10)
+	for _, claudeOnly := range []string{"Grep", "Glob", "Read tool", "offset/limit"} {
+		if strings.Contains(p, claudeOnly) {
+			t.Errorf("agy prompt still mentions %q", claudeOnly)
+		}
+	}
+}
+
+func TestCheckAgyPermissions(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "settings.json")
+	if err := CheckAgyPermissions(p); err == nil {
+		t.Error("a missing settings file should fail")
+	}
+	os.WriteFile(p, []byte(`{"permissions":{"deny":["command(*)"]}}`), 0o600)
+	if err := CheckAgyPermissions(p); err == nil || !strings.Contains(err.Error(), "read_url(*)") {
+		t.Errorf("incomplete deny list = %v", err)
+	}
+	b, _ := json.Marshal(map[string]any{"permissions": map[string]any{"deny": AgyRequiredDeny}})
+	os.WriteFile(p, b, 0o600)
+	if err := CheckAgyPermissions(p); err != nil {
+		t.Errorf("full deny list = %v", err)
+	}
+}
+
+func TestFallback(t *testing.T) {
+	ctx := context.Background()
+	logs := writeLogs(t, "ERROR boom\n")
+	var why error
+	f := Fallback{Primary: Fake{Err: fmt.Errorf("quota")}, Secondary: Fake{}, OnFallback: func(err error) { why = err }}
+	if d, err := f.Analyze(ctx, "abc-1", logs); err != nil || d.Model != "fake" || why == nil {
+		t.Fatalf("Fallback = %+v, %v, %v", d, err, why)
+	}
+	f = Fallback{Primary: Fake{Err: fmt.Errorf("quota")}, Secondary: Fake{Err: fmt.Errorf("down")}}
+	if _, err := f.Analyze(ctx, "abc-1", logs); err == nil || !strings.Contains(err.Error(), "quota") || !strings.Contains(err.Error(), "down") {
+		t.Fatalf("both failing = %v", err)
 	}
 }
 
