@@ -113,8 +113,46 @@ func TestRepos(t *testing.T) {
 	if eng.do("GET", "/api/repos", nil, &list); !list.CanAgySession {
 		t.Fatal("canAgySession should be set when agy is installed")
 	}
+	// Deleting waits for the session to stop.
+	os.WriteFile(filepath.Join(dir, ".fake-tmux-ls"), []byte("svc|"+filepath.Join(dir, "grp", "svc")+"|1759651200|\n"), 0o644)
+	if code := eng.do("POST", "/api/repos/delete", RepoRequest{Project: "grp/svc"}, nil); code != 409 {
+		t.Fatalf("delete with a session = %d", code)
+	}
+	os.Remove(filepath.Join(dir, ".fake-tmux-ls"))
 	if code := eng.do("POST", "/api/repos/session/stop", RepoRequest{Project: "grp/svc"}, &sr); code != 200 {
 		t.Fatalf("stop = %d %+v", code, sr)
+	}
+
+	// A tracer store (no checkout) can be cloned over, then deleted.
+	gitCmd(t, root, "init", "-q", "--bare", "-b", "master", filepath.Join(remote, "grp", "store.git"))
+	gitCmd(t, work, "push", "-q", filepath.Join(remote, "grp", "store.git"), "HEAD:master")
+	if _, err := h.api.Repos.Sync(t.Context(), "store", "master"); err != nil {
+		t.Fatal(err)
+	}
+	if code := eng.do("POST", "/api/repos", RepoRequest{Project: "store"}, nil); code != 202 {
+		t.Fatalf("clone over store = %d", code)
+	}
+	for i := 0; ; i++ {
+		eng.do("GET", "/api/repos", nil, &list)
+		if len(list.Repos) == 2 && list.Repos[0].Project == "grp/store" && list.Repos[0].Branch == "master" && list.Repos[0].Commit != "" {
+			break
+		}
+		if i > 200 {
+			t.Fatalf("store not upgraded: %+v", list)
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if code := eng.do("POST", "/api/repos/delete", RepoRequest{Project: "grp/missing"}, nil); code != 404 {
+		t.Fatalf("delete unknown = %d", code)
+	}
+	if code := qa.do("POST", "/api/repos/delete", RepoRequest{Project: "grp/store"}, nil); code != 403 {
+		t.Fatalf("QA delete = %d", code)
+	}
+	if code := eng.do("POST", "/api/repos/delete", RepoRequest{Project: "grp/store"}, nil); code != 200 {
+		t.Fatalf("delete = %d", code)
+	}
+	if eng.do("GET", "/api/repos", nil, &list); len(list.Repos) != 1 || list.Repos[0].Project != "grp/svc" {
+		t.Fatalf("after delete = %+v", list.Repos)
 	}
 
 	var audit AuditListResponse
@@ -123,7 +161,7 @@ func TestRepos(t *testing.T) {
 	for _, e := range audit.Entries {
 		actions = append(actions, e.Action+":"+e.Result)
 	}
-	for _, want := range []string{"repo.clone:ok", "repo.clone:failed", "repo.session_start:ok", "repo.session_stop:ok"} {
+	for _, want := range []string{"repo.clone:ok", "repo.clone:failed", "repo.session_start:ok", "repo.session_stop:ok", "repo.delete:ok"} {
 		if !strings.Contains(strings.Join(actions, ","), want) {
 			t.Errorf("audit missing %s: %v", want, actions)
 		}

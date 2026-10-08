@@ -3366,6 +3366,55 @@
         ]
       }
     },
+    "/api/repos/delete": {
+      "post": {
+        "operationId": "deleteRepo",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RepoRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Delete a repo and the tracer's worktrees made from it",
+        "tags": [
+          "repos"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
+      }
+    },
     "/api/repos/session/start": {
       "post": {
         "operationId": "startRepoSession",

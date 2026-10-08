@@ -473,7 +473,7 @@ func (m *Manager) initStore(ctx context.Context, store string) error {
 // history. A store made by initStore has no HEAD commit, so it is not one
 // even though git does not call it shallow.
 func (m *Manager) isFullClone(ctx context.Context, dir string) bool {
-	if _, err := m.git(ctx, dir, "rev-parse", "--verify", "-q", "HEAD^{commit}"); err != nil {
+	if !m.hasHead(ctx, dir) {
 		return false
 	}
 	out, err := m.git(ctx, dir, "rev-parse", "--is-shallow-repository")
@@ -672,8 +672,9 @@ func (m *Manager) ProjectPath(name string) (string, bool) {
 
 // Clone makes a full clone of project (a path or a bare name in Group) at
 // <Dir>/<project> on the remote's default branch, and returns its
-// directory. The token is passed the same way as for Sync, so it is not
-// stored in the clone.
+// directory. A tracer store already there (no checkout) is turned into a
+// full clone in place. The token is passed the same way as for Sync, so it
+// is not stored in the clone.
 func (m *Manager) Clone(ctx context.Context, project string) (string, error) {
 	project, ok := m.ProjectPath(project)
 	if !ok {
@@ -682,7 +683,10 @@ func (m *Manager) Clone(ctx context.Context, project string) (string, error) {
 	dest := filepath.Join(m.cfg.Dir, filepath.FromSlash(project))
 	defer m.lock(project)()
 	if _, err := os.Stat(dest); err == nil {
-		return dest, ErrExists
+		if _, err := os.Stat(filepath.Join(dest, ".git")); err != nil || m.hasHead(ctx, dest) {
+			return dest, ErrExists
+		}
+		return dest, m.upgrade(ctx, dest, project)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return dest, err
 	}
@@ -705,6 +709,89 @@ func (m *Manager) Clone(ctx context.Context, project string) (string, error) {
 		return dest, err
 	}
 	return dest, nil
+}
+
+// upgrade turns a tracer store into a full clone in place: it fetches every
+// branch with its whole history and checks out the default one. Replacing
+// the store with a fresh clone would break the tracer's worktrees, which
+// point into its .git.
+func (m *Manager) upgrade(ctx context.Context, dir, project string) error {
+	if _, err := m.git(ctx, dir, "config", "--get", "remote.origin.url"); err != nil {
+		if _, err := m.git(ctx, dir, "remote", "add", "origin", m.cfg.URL+"/"+project+".git"); err != nil {
+			return err
+		}
+	}
+	args := []string{"fetch", "--quiet", "--tags"}
+	if out, err := m.git(ctx, dir, "rev-parse", "--is-shallow-repository"); err == nil && strings.TrimSpace(out) == "true" {
+		args = append(args, "--unshallow")
+	}
+	if _, err := m.gitTimeout(ctx, m.cfg.CloneTimeout, dir, append(args, "origin", "+refs/heads/*:refs/remotes/origin/*")...); err != nil {
+		return err
+	}
+	if _, err := m.git(ctx, dir, "remote", "set-head", "origin", "--auto"); err != nil {
+		return err
+	}
+	out, err := m.git(ctx, dir, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
+	if err != nil {
+		return err
+	}
+	branch := strings.TrimPrefix(strings.TrimSpace(out), "origin/")
+	if !refName.MatchString(branch) || strings.Contains(branch, "..") {
+		return fmt.Errorf("invalid default branch %q", branch)
+	}
+	_, err = m.git(ctx, dir, "checkout", "--quiet", "-B", branch, "--track", "origin/"+branch)
+	return err
+}
+
+// hasHead reports whether dir has a commit checked out; a tracer store
+// does not.
+func (m *Manager) hasHead(ctx context.Context, dir string) bool {
+	_, err := m.git(ctx, dir, "rev-parse", "--verify", "-q", "HEAD^{commit}")
+	return err == nil
+}
+
+// ErrInUse is returned by Remove while a worktree of the project is still
+// needed.
+var ErrInUse = errors.New("repo masih dipakai trace")
+
+// Remove deletes project's repo under Dir and the tracer's worktrees made
+// from it, unless keep reports one of those worktrees as still needed.
+func (m *Manager) Remove(ctx context.Context, project string, keep func(dir string) bool) error {
+	if !validProject(project) {
+		return ErrInvalidProject
+	}
+	dir := filepath.Join(m.cfg.Dir, filepath.FromSlash(project))
+	defer m.lock(project)()
+	if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
+		return ErrNotCloned
+	}
+	worktrees, err := filepath.Glob(filepath.Join(m.cfg.Dir, worktreesDir, filepath.FromSlash(project)+"@*"))
+	if err != nil {
+		return err
+	}
+	for _, wt := range worktrees {
+		if keep != nil && keep(wt) {
+			return ErrInUse
+		}
+	}
+	for _, wt := range worktrees {
+		if err := os.RemoveAll(wt); err != nil {
+			return err
+		}
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		return err
+	}
+	// Drop group directories left empty; os.Remove fails on the rest.
+	root := filepath.Clean(m.cfg.Dir)
+	for _, base := range []string{root, filepath.Join(root, worktreesDir)} {
+		for p := filepath.Dir(filepath.Join(base, filepath.FromSlash(project))); p != base; p = filepath.Dir(p) {
+			if os.Remove(p) != nil {
+				break
+			}
+		}
+	}
+	return nil
 }
 
 // git runs one git command. Credentials and TLS settings are passed in the

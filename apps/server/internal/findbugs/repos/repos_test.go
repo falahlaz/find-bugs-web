@@ -246,6 +246,78 @@ func TestCloneAndList(t *testing.T) {
 	}
 }
 
+// TestUpgradeAndRemove turns a tracer store into a full clone in place,
+// then removes it with its worktrees.
+func TestUpgradeAndRemove(t *testing.T) {
+	root := t.TempDir()
+	remote := filepath.Join(root, "gitlab")
+	work := filepath.Join(root, "work")
+	git(t, root, "init", "-q", "--bare", "-b", "master", filepath.Join(remote, "grp", "svc.git"))
+	git(t, root, "clone", "-q", filepath.Join(remote, "grp", "svc.git"), work)
+	for _, v := range []string{"one", "two"} {
+		os.WriteFile(filepath.Join(work, "a.js"), []byte(v), 0o644)
+		git(t, work, "add", ".")
+		git(t, work, "commit", "-qm", v)
+	}
+	git(t, work, "push", "-q", "origin", "HEAD:master", "HEAD:develop")
+
+	repos := filepath.Join(root, "repos")
+	m := New(Config{URL: "file://" + remote, Token: "glpat-secret", Dir: repos, Group: "grp", Ref: "master"})
+	ctx := context.Background()
+	co, err := m.Sync(ctx, "svc", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, err := m.List(ctx)
+	if err != nil || len(l) != 1 || l[0].Commit != "" || !l[0].Shallow {
+		t.Fatalf("store List = %+v, %v", l, err)
+	}
+
+	dir, err := m.Clone(ctx, "svc")
+	if err != nil {
+		t.Fatalf("upgrade = %v", err)
+	}
+	l, _ = m.List(ctx)
+	if l[0].Branch != "master" || l[0].Subject != "two" || l[0].Shallow {
+		t.Fatalf("upgraded List = %+v", l)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "a.js")); string(b) != "two" {
+		t.Fatalf("a.js = %q", b)
+	}
+	if git(t, dir, "rev-parse", "origin/develop") == "" {
+		t.Fatal("other branches not fetched")
+	}
+	cfg, _ := os.ReadFile(filepath.Join(dir, ".git", "config"))
+	if strings.Contains(string(cfg), "secret") {
+		t.Fatalf("credentials leaked into .git/config:\n%s", cfg)
+	}
+	// The tracer's worktree still works off the upgraded store.
+	if git(t, co.Dir, "rev-parse", "HEAD") != co.Commit {
+		t.Fatal("worktree broken by upgrade")
+	}
+	if _, err := m.Clone(ctx, "svc"); err != ErrExists {
+		t.Fatalf("Clone of upgraded repo err = %v", err)
+	}
+
+	if err := m.Remove(ctx, "grp/svc", func(d string) bool { return d == co.Dir }); err != ErrInUse {
+		t.Fatalf("Remove in use err = %v", err)
+	}
+	if err := m.Remove(ctx, "grp/svc", nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range []string{dir, co.Dir, filepath.Join(repos, "grp"), filepath.Join(repos, ".worktrees", "grp")} {
+		if _, err := os.Stat(d); !os.IsNotExist(err) {
+			t.Errorf("%s left behind", d)
+		}
+	}
+	if err := m.Remove(ctx, "grp/svc", nil); !errors.Is(err, ErrNotCloned) {
+		t.Fatalf("Remove missing err = %v", err)
+	}
+	if err := m.Remove(ctx, "../x", nil); err != ErrInvalidProject {
+		t.Fatalf("Remove bad err = %v", err)
+	}
+}
+
 // TestSparseConfig fetches env branches into a blobless store, picks the
 // commit before a time and checks out only one directory of it.
 func TestSparseConfig(t *testing.T) {

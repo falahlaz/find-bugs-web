@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"os"
 	"sort"
 	"sync"
 	"time"
@@ -27,6 +28,8 @@ func (a *API) registerRepoRoutes() {
 		resps: map[int]any{200: ReposResponse{}}, h: a.listRepos})
 	a.add(route{method: "POST", path: "/api/repos", summary: "Clone a GitLab project (in the background)", tag: "repos", opID: "cloneRepo", roles: eng,
 		req: RepoRequest{}, resps: map[int]any{202: RepoCloneView{}}, h: a.cloneRepo})
+	a.add(route{method: "POST", path: "/api/repos/delete", summary: "Delete a repo and the tracer's worktrees made from it", tag: "repos", opID: "deleteRepo", roles: eng,
+		req: RepoRequest{}, resps: map[int]any{200: OKResponse{}}, h: a.deleteRepo})
 	a.add(route{method: "POST", path: "/api/repos/session/start", summary: "Start a Remote Control session (Claude or agy) in a repo", tag: "repos", opID: "startRepoSession", roles: eng,
 		req: RepoSessionRequest{}, resps: map[int]any{200: RepoSessionResponse{}}, h: a.startRepoSession})
 	a.add(route{method: "POST", path: "/api/repos/session/stop", summary: "Stop a repo's Remote Control session", tag: "repos", opID: "stopRepoSession", roles: eng,
@@ -124,7 +127,8 @@ func (a *API) cloneRepo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	for _, rp := range list {
-		if rp.Project == project {
+		// A tracer store (no checkout) is upgraded to a full clone.
+		if rp.Project == project && rp.Commit != "" {
 			httpx.Error(w, http.StatusConflict, "exists", "Repo "+project+" sudah ada.")
 			return
 		}
@@ -167,7 +171,54 @@ func (a *API) cloneRepo(w http.ResponseWriter, r *http.Request) {
 	httpx.JSON(w, http.StatusAccepted, view)
 }
 
-// sessionRepo finds the repo a session request names.
+func (a *API) deleteRepo(w http.ResponseWriter, r *http.Request) {
+	if !a.reposEnabled(w) {
+		return
+	}
+	var req RepoRequest
+	if !httpx.Decode(w, r, &req) {
+		return
+	}
+	rp, ok := a.sessionRepo(w, r, req.Project)
+	if !ok {
+		return
+	}
+	if _, ok := a.sessions(r.Context())[rp.Dir]; ok {
+		httpx.Error(w, http.StatusConflict, "session_running", "Stop dulu sesi yang jalan di "+rp.Project+".")
+		return
+	}
+	a.cloning.mu.Lock()
+	cloning := a.cloning.clones[rp.Project] != nil && a.cloning.clones[rp.Project].State == "cloning"
+	a.cloning.mu.Unlock()
+	if cloning {
+		httpx.Error(w, http.StatusConflict, "cloning", "Repo "+rp.Project+" sedang di-clone.")
+		return
+	}
+	active, err := a.Store.ActiveTraceDirs(r.Context())
+	if err != nil {
+		httpx.Internal(w, r, err)
+		return
+	}
+	// A trace job saves its session only when done; until then its
+	// worktree is known only by being synced (touched) within a job's time.
+	busy := func(dir string) bool {
+		fi, err := os.Stat(dir)
+		return active[dir] || (err == nil && time.Since(fi.ModTime()) < a.Cfg.JobTimeout)
+	}
+	switch err := a.Repos.Remove(r.Context(), rp.Project, busy); {
+	case errors.Is(err, repos.ErrInUse):
+		a.audit(r, "repo.delete", "failed", rp.Project+": "+err.Error())
+		httpx.Error(w, http.StatusConflict, "in_use", "Repo "+rp.Project+" masih dipakai trace yang sedang jalan atau trace chat yang belum kedaluwarsa, jadi belum bisa dihapus.")
+	case err != nil:
+		a.audit(r, "repo.delete", "failed", rp.Project+": "+err.Error())
+		httpx.Internal(w, r, err)
+	default:
+		a.audit(r, "repo.delete", "ok", rp.Project)
+		httpx.JSON(w, http.StatusOK, OKResponse{OK: true})
+	}
+}
+
+// sessionRepo finds the repo a request names.
 func (a *API) sessionRepo(w http.ResponseWriter, r *http.Request, project string) (repos.Repo, bool) {
 	list, err := a.Repos.List(r.Context())
 	if err != nil {
