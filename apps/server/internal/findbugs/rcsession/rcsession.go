@@ -97,7 +97,7 @@ var (
 // Sessions returns the sessions started by the script, by folder. No tmux
 // server running means no sessions.
 func (m *Manager) Sessions(ctx context.Context) (map[string]Session, error) {
-	out, err := m.run(ctx, 10*time.Second, m.cfg.Tmux, "ls", "-F", "#{session_name}|#{@rc_dir}|#{session_created}|#{@rc_engine}")
+	out, err := m.run(ctx, 10*time.Second, m.cfg.Tmux, "ls", "-F", "#{session_name}|#{@rc_dir}|#{session_created}|#{@rc_engine}|#{@rc_url}")
 	if err != nil {
 		// tmux exits 1 with "no server running" (or "error connecting")
 		// when there is nothing to list.
@@ -109,14 +109,21 @@ func (m *Manager) Sessions(ctx context.Context) (map[string]Session, error) {
 	}
 	sessions := map[string]Session{}
 	for _, line := range strings.Split(out, "\n") {
-		f := strings.SplitN(line, "|", 4)
+		f := strings.SplitN(line, "|", 5)
 		if len(f) < 3 || f[1] == "" {
 			continue
 		}
 		// Sessions started before engines existed are Claude's.
 		s := Session{Name: f[0], Dir: f[1], Engine: Claude}
-		if len(f) == 4 && f[3] == Agy {
+		if len(f) >= 4 && f[3] == Agy {
 			s.Engine = Agy
+		}
+		// The script stores the agy link with the conversation it opens,
+		// which the screen does not show.
+		if len(f) == 5 && s.Engine == Agy && agyURLRe.MatchString(f[4]) {
+			s.URL = f[4]
+			sessions[s.Dir] = s
+			continue
 		}
 		if sec, err := strconv.ParseInt(f[2], 10, 64); err == nil {
 			s.Since = time.Unix(sec, 0)
