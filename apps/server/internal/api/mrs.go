@@ -21,6 +21,8 @@ func (a *API) registerMRRoutes() {
 		roles: eng, resps: map[int]any{200: MRConflictsResponse{}}, h: a.mrConflicts})
 	a.add(route{method: "POST", path: "/api/mrs/{project}/{iid}/merge", summary: "Merge an MR that is still ready and remove its source branch", tag: "mrs", opID: "mergeMR",
 		roles: eng, resps: map[int]any{200: MRMergeResponse{}}, h: a.mergeMR})
+	a.add(route{method: "POST", path: "/api/mrs/{project}/{iid}/discard", summary: "Close an MR without merging and delete its source branch", tag: "mrs", opID: "discardMR",
+		roles: eng, resps: map[int]any{200: MRDiscardResponse{}}, h: a.discardMR})
 }
 
 func (a *API) mrsEnabled(w http.ResponseWriter) bool {
@@ -191,4 +193,34 @@ func (a *API) mergeMR(w http.ResponseWriter, r *http.Request) {
 	}
 	a.audit(r, "mr.merge", "ok", ref)
 	httpx.JSON(w, http.StatusOK, MRMergeResponse{MR: mrView(mrtriage.MR{MergeRequest: mr}, nil)})
+}
+
+func (a *API) discardMR(w http.ResponseWriter, r *http.Request) {
+	if !a.mrsEnabled(w) {
+		return
+	}
+	project, iid, ok := mrPathIDs(w, r)
+	if !ok {
+		return
+	}
+	mr, deleted, err := a.MRs.Discard(r.Context(), project, iid)
+	ref := mr.References.Full
+	if ref == "" {
+		ref = strconv.FormatInt(project, 10) + "!" + strconv.FormatInt(iid, 10)
+	}
+	if err != nil {
+		a.audit(r, "mr.discard", "error", ref+": "+err.Error())
+		if errors.Is(err, mrtriage.ErrNotDiscardable) {
+			httpx.Error(w, http.StatusConflict, "not_discardable", err.Error())
+			return
+		}
+		gitlabError(w, err)
+		return
+	}
+	detail := ref + " ditutup, branch " + mr.SourceBranch + " dihapus"
+	if !deleted {
+		detail = ref + " ditutup, branch " + mr.SourceBranch + " sudah tidak ada"
+	}
+	a.audit(r, "mr.discard", "ok", detail)
+	httpx.JSON(w, http.StatusOK, MRDiscardResponse{MR: mrView(mrtriage.MR{MergeRequest: mr}, nil), BranchDeleted: deleted})
 }

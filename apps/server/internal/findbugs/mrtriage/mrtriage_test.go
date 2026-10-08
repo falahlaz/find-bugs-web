@@ -13,6 +13,8 @@ type fakeGL struct {
 	approvals map[int64]gitlab.Approvals
 	ds        []gitlab.Discussion
 	merged    []int64
+	closed    []int64
+	deleted   []string
 }
 
 func (f *fakeGL) MyMergeRequests(context.Context, string, string) ([]gitlab.MergeRequest, error) {
@@ -43,6 +45,21 @@ func (f *fakeGL) Discussions(context.Context, int64, int64) ([]gitlab.Discussion
 func (f *fakeGL) Merge(_ context.Context, _, iid int64) (gitlab.MergeRequest, error) {
 	f.merged = append(f.merged, iid)
 	return gitlab.MergeRequest{IID: iid, State: "merged"}, nil
+}
+
+func (f *fakeGL) Close(_ context.Context, _, iid int64) (gitlab.MergeRequest, error) {
+	f.closed = append(f.closed, iid)
+	m, err := f.MergeRequest(context.Background(), 0, iid)
+	m.State = "closed"
+	return m, err
+}
+
+func (f *fakeGL) DeleteBranch(_ context.Context, _ int64, branch string) error {
+	if branch == "gone" {
+		return gitlab.ErrNotFound
+	}
+	f.deleted = append(f.deleted, branch)
+	return nil
 }
 
 func mr(iid int64, title string, mod func(*gitlab.MergeRequest)) gitlab.MergeRequest {
@@ -160,5 +177,38 @@ func TestMergeRechecks(t *testing.T) {
 	}
 	if !eq(gl.merged, []int64{1}) {
 		t.Fatalf("merged = %v", gl.merged)
+	}
+}
+
+func TestDiscard(t *testing.T) {
+	branch := func(src, tgt string) func(*gitlab.MergeRequest) {
+		return func(m *gitlab.MergeRequest) { m.SourceBranch, m.TargetBranch = src, tgt }
+	}
+	gl := &fakeGL{mrs: []gitlab.MergeRequest{
+		mr(1, "A | Falah | test", branch("test/x", "main")),
+		mr(2, "A | Falah | old", func(m *gitlab.MergeRequest) { m.State, m.SourceBranch, m.TargetBranch = "closed", "test/y", "main" }),
+		mr(3, "A | Falah | gone", branch("gone", "main")),
+		mr(4, "A | Budi | not mine", branch("b", "main")),
+		mr(5, "A | Falah | merged", func(m *gitlab.MergeRequest) { m.State, m.SourceBranch = "merged", "m" }),
+		mr(6, "A | Falah | same", branch("main", "main")),
+	}}
+	s := &Service{GL: gl, Author: "Falah"}
+	ctx := context.Background()
+	if m, del, err := s.Discard(ctx, 1, 1); err != nil || !del || m.State != "closed" {
+		t.Fatalf("discard open = %+v %v %v", m, del, err)
+	}
+	if _, del, err := s.Discard(ctx, 1, 2); err != nil || !del {
+		t.Fatalf("discard closed = %v %v", del, err)
+	}
+	if _, del, err := s.Discard(ctx, 1, 3); err != nil || del {
+		t.Fatalf("discard with branch gone = %v %v", del, err)
+	}
+	for _, iid := range []int64{4, 5, 6} {
+		if _, _, err := s.Discard(ctx, 1, iid); !errors.Is(err, ErrNotDiscardable) {
+			t.Errorf("discard %d err = %v", iid, err)
+		}
+	}
+	if !eq(gl.closed, []int64{1, 3}) || len(gl.deleted) != 2 || gl.deleted[0] != "test/x" || gl.deleted[1] != "test/y" {
+		t.Fatalf("closed = %v, deleted = %v", gl.closed, gl.deleted)
 	}
 }

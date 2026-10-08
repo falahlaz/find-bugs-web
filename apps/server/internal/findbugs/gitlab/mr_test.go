@@ -38,6 +38,20 @@ func TestMergeRequests(t *testing.T) {
 		case "/api/v4/projects/42/merge_requests/9/merge":
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			fmt.Fprint(w, `{"message":"405 Method Not Allowed"}`)
+		case "/api/v4/projects/42/merge_requests/7":
+			b, _ := io.ReadAll(r.Body)
+			if r.Method != http.MethodPut || string(b) != "state_event=close" {
+				t.Errorf("close = %s %q", r.Method, b)
+			}
+			fmt.Fprint(w, `{"iid":7,"project_id":42,"state":"closed"}`)
+		case "/api/v4/projects/42/repository/branches/feat/x":
+			if r.Method != http.MethodDelete || !strings.HasSuffix(r.URL.EscapedPath(), "/branches/feat%2Fx") {
+				t.Errorf("delete branch = %s %s", r.Method, r.URL.EscapedPath())
+			}
+			w.WriteHeader(http.StatusNoContent)
+		case "/api/v4/projects/42/repository/branches/main":
+			w.WriteHeader(http.StatusForbidden)
+			fmt.Fprint(w, `{"message":"403 Forbidden"}`)
 		default:
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -76,5 +90,17 @@ func TestMergeRequests(t *testing.T) {
 	}
 	if _, err := c.MergeRequest(ctx, 42, 1); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("missing MR err = %v", err)
+	}
+	if m, err := c.Close(ctx, 42, 7); err != nil || m.State != "closed" {
+		t.Fatalf("close = %+v, %v", m, err)
+	}
+	if err := c.DeleteBranch(ctx, 42, "feat/x"); err != nil {
+		t.Fatalf("delete branch = %v", err)
+	}
+	if err := c.DeleteBranch(ctx, 42, "main"); !errors.Is(err, ErrForbidden) {
+		t.Fatalf("protected branch err = %v", err)
+	}
+	if err := c.DeleteBranch(ctx, 42, "nope"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing branch err = %v", err)
 	}
 }

@@ -384,3 +384,10 @@ type MRConflictsResponse struct {
 type MRMergeResponse struct {
 	MR MRView `json:"mr"`
 }
+
+// MRDiscardResponse is a merge request closed with its source branch
+// deleted. BranchDeleted is false when the branch was already gone.
+type MRDiscardResponse struct {
+	MR            MRView `json:"mr"`
+	BranchDeleted bool   `json:"branchDeleted"`
+}

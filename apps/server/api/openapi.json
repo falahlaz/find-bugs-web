@@ -722,6 +722,21 @@
         ],
         "type": "object"
       },
+      "MRDiscardResponse": {
+        "properties": {
+          "branchDeleted": {
+            "type": "boolean"
+          },
+          "mr": {
+            "$ref": "#/components/schemas/MRView"
+          }
+        },
+        "required": [
+          "branchDeleted",
+          "mr"
+        ],
+        "type": "object"
+      },
       "MRMergeResponse": {
         "properties": {
           "mr": {
@@ -3074,6 +3089,63 @@
           }
         ],
         "summary": "Files that conflict, from a merge in the repo under GITLAB_REPOS_DIR",
+        "tags": [
+          "mrs"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
+      }
+    },
+    "/api/mrs/{project}/{iid}/discard": {
+      "post": {
+        "operationId": "discardMR",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "project",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "iid",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MRDiscardResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Close an MR without merging and delete its source branch",
         "tags": [
           "mrs"
         ],
