@@ -88,9 +88,10 @@ func TestSessions(t *testing.T) {
 		t.Fatalf("no server: %v, %v", s, err)
 	}
 	gw := filepath.Join(m.cfg.Root, "grp", "gw")
-	os.WriteFile(filepath.Join(m.cfg.Root, ".fake-tmux-ls"), []byte("svc|"+dir+"|1759651200|\nmain||1759651200|\ngw|"+gw+"|1759651200|agy\n"), 0o644)
+	web := filepath.Join(m.cfg.Root, "grp", "web")
+	os.WriteFile(filepath.Join(m.cfg.Root, ".fake-tmux-ls"), []byte("svc|"+dir+"|1759651200|\nmain||1759651200|\ngw|"+gw+"|1759651200|agy\nweb|"+web+"|1759651200|agy|https://antigravity.google.com/r/inst_web?p=c%2Fconv-9\n"), 0o644)
 	s, err := m.Sessions(ctx)
-	if err != nil || len(s) != 2 {
+	if err != nil || len(s) != 3 {
 		t.Fatalf("Sessions = %v, %v", s, err)
 	}
 	if got := s[dir]; got.Name != "svc" || got.Engine != Claude || got.URL != "https://claude.ai/code?environment=env_svc" || got.Since.Unix() != 1759651200 {
@@ -98,6 +99,9 @@ func TestSessions(t *testing.T) {
 	}
 	if got := s[gw]; got.Engine != Agy || got.URL != "https://antigravity.google.com/r/inst_gw?p=c%2Fconv-1" {
 		t.Fatalf("agy session = %+v", got)
+	}
+	if got := s[web]; got.Engine != Agy || got.URL != "https://antigravity.google.com/r/inst_web?p=c%2Fconv-9" {
+		t.Fatalf("agy session with stored link = %+v", got)
 	}
 	// Another folder with the same name cannot take over the session.
 	other := filepath.Join(m.cfg.Root, "other", "svc")
