@@ -8,51 +8,57 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
-	"slices"
 	"strings"
 	"syscall"
 	"time"
 )
 
-// AgyRequiredDeny are the permission rules the Antigravity CLI settings must
-// deny before logs are given to it. agy has no per-run tool or settings flag,
-// so these live in the global ~/.gemini/antigravity-cli/settings.json: no
-// commands, no web or MCP access, no writes, and no reads outside the
-// temporary directory holding the logs (agy's search_web tool cannot be
-// denied, but only reaches Google).
-var AgyRequiredDeny = []string{
+// agyDeny are the permission rules of the settings each log analysis runs
+// with: no commands, no web or MCP access, no writes, and no reads outside
+// the temporary directory holding the logs (agy's search_web tool cannot be
+// denied, but only reaches Google). They live in a throwaway HOME, so the
+// user's own agy settings (used by Remote Control sessions) stay untouched.
+var agyDeny = []string{
 	"command(*)", "unsandboxed(*)", "read_url(*)", "execute_url(*)", "mcp(*)", "write_file(*)",
 	"read_file(/home/)", "read_file(/root/)", "read_file(/etc/)", "read_file(/proc/)", "read_file(/var/)",
 	"read_file(/opt/)", "read_file(/srv/)", "read_file(/run/)", "read_file(/sys/)", "read_file(/dev/)",
 	"read_file(/mnt/)", "read_file(/media/)", "read_file(/boot/)", "read_file(/usr/)",
 }
 
-// CheckAgyPermissions reports which AgyRequiredDeny rules the settings file
-// at path is missing.
-func CheckAgyPermissions(path string) error {
-	raw, err := os.ReadFile(path)
+// agyAuthFiles are copied from the signed-in state directory into the
+// throwaway HOME: the OAuth token and the finished onboarding.
+var agyAuthFiles = []string{"antigravity-oauth-token", "jetski_state.pbtxt", "installation_id"}
+
+// agyHome creates a throwaway HOME for one agy run, signed in like the
+// state directory at stateDir and locked down by agyDeny. Its conversation,
+// which holds the logs, goes when the caller removes it.
+func agyHome(stateDir string) (string, error) {
+	home, err := os.MkdirTemp("", "fbw-agy-home-")
 	if err != nil {
-		return err
+		return "", err
 	}
-	var s struct {
-		Permissions struct {
-			Deny []string `json:"deny"`
-		} `json:"permissions"`
+	dst := filepath.Join(home, ".gemini", "antigravity-cli")
+	if err := os.MkdirAll(dst, 0o700); err != nil {
+		os.RemoveAll(home)
+		return "", err
 	}
-	if err := json.Unmarshal(raw, &s); err != nil {
-		return fmt.Errorf("%s: %w", path, err)
-	}
-	var missing []string
-	for _, r := range AgyRequiredDeny {
-		if !slices.Contains(s.Permissions.Deny, r) {
-			missing = append(missing, r)
+	for _, f := range agyAuthFiles {
+		b, err := os.ReadFile(filepath.Join(stateDir, f))
+		if err != nil {
+			os.RemoveAll(home)
+			return "", fmt.Errorf("agy is not signed in (%w)", err)
+		}
+		if err := os.WriteFile(filepath.Join(dst, f), b, 0o600); err != nil {
+			os.RemoveAll(home)
+			return "", err
 		}
 	}
-	if len(missing) > 0 {
-		return fmt.Errorf("%s does not deny %s", path, strings.Join(missing, ", "))
+	settings, _ := json.Marshal(map[string]any{"permissions": map[string]any{"deny": agyDeny}})
+	if err := os.WriteFile(filepath.Join(dst, "settings.json"), settings, 0o600); err != nil {
+		os.RemoveAll(home)
+		return "", err
 	}
-	return nil
+	return home, nil
 }
 
 // diagnosisSchema is the JSON schema agy enforces on the answer.
@@ -80,18 +86,17 @@ func AntigravityPrompt(transactionID string, size int64) string {
 	return agyTools.Replace(SystemPrompt + "\n\n" + UserPrompt(transactionID, size))
 }
 
-var conversationID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
-
 // Antigravity runs the Antigravity CLI (agy) in headless print mode, signed
 // in with the Google account of the user the server runs as, in an empty
-// directory holding only the log file. Tools are limited by the global
-// settings (see AgyRequiredDeny) and the terminal sandbox.
+// directory holding only the log file. Each run gets a throwaway HOME whose
+// settings deny every tool but reading the logs (see agyDeny), plus the
+// terminal sandbox.
 type Antigravity struct {
 	Bin     string
 	Model   string
 	Timeout time.Duration
-	// StateDir is agy's state directory (~/.gemini/antigravity-cli); the
-	// conversation, which holds the logs, is deleted from it after each run.
+	// StateDir is the signed-in agy state directory
+	// (~/.gemini/antigravity-cli) the token is copied from.
 	StateDir string
 }
 
@@ -116,9 +121,15 @@ func (a Antigravity) Analyze(ctx context.Context, transactionID, logPath string)
 		return Diagnosis{}, err
 	}
 	defer os.RemoveAll(dir)
+	home, err := agyHome(a.StateDir)
+	if err != nil {
+		return Diagnosis{}, err
+	}
+	defer os.RemoveAll(home)
 
 	cmd := exec.CommandContext(ctx, a.Bin, a.Args(AntigravityPrompt(transactionID, size))...)
 	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "HOME="+home)
 	// Own process group so a timeout kills agy and anything it spawned.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }
@@ -130,7 +141,6 @@ func (a Antigravity) Analyze(ctx context.Context, transactionID, logPath string)
 		return Diagnosis{}, fmt.Errorf("agy timed out after %s", a.Timeout)
 	}
 	var out struct {
-		ConversationID   string          `json:"conversation_id"`
 		Status           string          `json:"status"`
 		Response         string          `json:"response"`
 		Error            string          `json:"error"`
@@ -142,7 +152,6 @@ func (a Antigravity) Analyze(ctx context.Context, transactionID, logPath string)
 		}
 		return Diagnosis{}, fmt.Errorf("agy output is not JSON: %s", tail(stdout.String()))
 	}
-	a.forget(out.ConversationID)
 	if out.Status != "SUCCESS" {
 		return Diagnosis{}, fmt.Errorf("agy returned %s: %s", out.Status, tail(out.Error+" "+stderr.String()))
 	}
@@ -159,16 +168,6 @@ func (a Antigravity) Analyze(ctx context.Context, transactionID, logPath string)
 	}
 	d.Model = a.Model
 	return d, nil
-}
-
-// forget deletes the stored conversation, which holds a copy of the logs.
-func (a Antigravity) forget(id string) {
-	if a.StateDir == "" || !conversationID.MatchString(id) {
-		return
-	}
-	os.Remove(filepath.Join(a.StateDir, "conversations", id+".db"))
-	os.RemoveAll(filepath.Join(a.StateDir, "conversations", id))
-	os.RemoveAll(filepath.Join(a.StateDir, "brain", id))
 }
 
 // Fallback analyzes with Primary and, when it fails, with Secondary, so a

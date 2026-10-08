@@ -1,5 +1,6 @@
-// Package rcsession starts and stops Claude Remote Control (`claude rc`)
-// sessions for the repos under the repos directory. The work is done by the
+// Package rcsession starts and stops Remote Control sessions, Claude Code
+// (`claude rc`) or Antigravity CLI (`agy --remote-control`), for the repos
+// under the repos directory. The work is done by the
 // rc-session skill's script, so a session started from the website is the
 // same as one started with /rc-session: a tmux session named after the
 // folder and tagged with the tmux option @rc_dir.
@@ -27,6 +28,7 @@ import (
 type Config struct {
 	Script    string // rc-session.sh
 	ClaudeBin string // its directory is put on PATH for the script
+	AgyBin    string // likewise; agy sessions are offered when it exists
 	Root      string // only folders under it get sessions
 	// Launcher prefixes the script command. In production it is
 	// `systemd-run --user --scope ... --`, so a tmux server the script
@@ -36,12 +38,19 @@ type Config struct {
 	Tmux     string // tmux binary, default "tmux"
 }
 
+// Engines that can run a session.
+const (
+	Claude = "claude"
+	Agy    = "agy"
+)
+
 // Session is a running rc session.
 type Session struct {
-	Name  string
-	Dir   string
-	URL   string // claude.ai link, "" until it connected
-	Since time.Time
+	Name   string
+	Dir    string
+	Engine string // Claude or Agy
+	URL    string // claude.ai or antigravity link, "" until it connected
+	Since  time.Time
 }
 
 // ErrOutsideRoot is returned for a folder outside Config.Root.
@@ -71,12 +80,24 @@ func (m *Manager) Enabled() bool {
 	return err == nil && !fi.IsDir()
 }
 
-var urlRe = regexp.MustCompile(`https://claude\.ai/code\?environment=[A-Za-z0-9_]+`)
+// AgyEnabled reports whether agy sessions can be started.
+func (m *Manager) AgyEnabled() bool {
+	if !m.Enabled() || m.cfg.AgyBin == "" {
+		return false
+	}
+	fi, err := os.Stat(m.cfg.AgyBin)
+	return err == nil && !fi.IsDir()
+}
+
+var (
+	urlRe    = regexp.MustCompile(`https://claude\.ai/code\?environment=[A-Za-z0-9_]+`)
+	agyURLRe = regexp.MustCompile(`https://antigravity\.google(\.com)?/r/[A-Za-z0-9_-]+(\?[A-Za-z0-9_=%.&-]+)?`)
+)
 
 // Sessions returns the sessions started by the script, by folder. No tmux
 // server running means no sessions.
 func (m *Manager) Sessions(ctx context.Context) (map[string]Session, error) {
-	out, err := m.run(ctx, 10*time.Second, m.cfg.Tmux, "ls", "-F", "#{session_name}|#{@rc_dir}|#{session_created}")
+	out, err := m.run(ctx, 10*time.Second, m.cfg.Tmux, "ls", "-F", "#{session_name}|#{@rc_dir}|#{session_created}|#{@rc_engine}")
 	if err != nil {
 		// tmux exits 1 with "no server running" (or "error connecting")
 		// when there is nothing to list.
@@ -88,16 +109,24 @@ func (m *Manager) Sessions(ctx context.Context) (map[string]Session, error) {
 	}
 	sessions := map[string]Session{}
 	for _, line := range strings.Split(out, "\n") {
-		f := strings.SplitN(line, "|", 3)
-		if len(f) != 3 || f[1] == "" {
+		f := strings.SplitN(line, "|", 4)
+		if len(f) < 3 || f[1] == "" {
 			continue
 		}
-		s := Session{Name: f[0], Dir: f[1]}
+		// Sessions started before engines existed are Claude's.
+		s := Session{Name: f[0], Dir: f[1], Engine: Claude}
+		if len(f) == 4 && f[3] == Agy {
+			s.Engine = Agy
+		}
 		if sec, err := strconv.ParseInt(f[2], 10, 64); err == nil {
 			s.Since = time.Unix(sec, 0)
 		}
 		if pane, err := m.run(ctx, 5*time.Second, m.cfg.Tmux, "capture-pane", "-J", "-p", "-t", "="+s.Name+":"); err == nil {
-			s.URL = urlRe.FindString(pane)
+			if s.Engine == Agy {
+				s.URL = agyURLRe.FindString(pane)
+			} else {
+				s.URL = urlRe.FindString(pane)
+			}
 		}
 		sessions[s.Dir] = s
 	}
@@ -109,8 +138,20 @@ func Name(dir string) string {
 	return strings.NewReplacer(".", "-", ":", "-").Replace(filepath.Base(dir))
 }
 
-// Start starts a session for dir and returns the script's report.
-func (m *Manager) Start(ctx context.Context, dir string) (string, error) {
+// Start starts a session with engine (Claude or Agy) for dir and returns
+// the script's report.
+func (m *Manager) Start(ctx context.Context, dir, engine string) (string, error) {
+	var args []string
+	switch engine {
+	case Claude:
+	case Agy:
+		if !m.AgyEnabled() {
+			return "", errors.New("agy tidak terpasang di server ini")
+		}
+		args = []string{"--agy"}
+	default:
+		return "", fmt.Errorf("engine %q tidak dikenal", engine)
+	}
 	dir, err := m.check(dir)
 	if err != nil {
 		return "", err
@@ -126,7 +167,7 @@ func (m *Manager) Start(ctx context.Context, dir string) (string, error) {
 		}
 	}
 	// Trust prompt (up to ~25s) plus waiting for Connected (30s).
-	return m.script(ctx, 90*time.Second, "start", dir)
+	return m.script(ctx, 90*time.Second, append([]string{"start", dir}, args...)...)
 }
 
 // Stop kills dir's session and returns the script's report.
@@ -208,6 +249,9 @@ func (m *Manager) env() []string {
 		path = filepath.Dir(m.cfg.ClaudeBin) + ":" + path
 	} else if home, err := os.UserHomeDir(); err == nil {
 		path = filepath.Join(home, ".local", "bin") + ":" + path
+	}
+	if m.cfg.AgyBin != "" && filepath.IsAbs(m.cfg.AgyBin) && !strings.Contains(":"+path+":", ":"+filepath.Dir(m.cfg.AgyBin)+":") {
+		path = filepath.Dir(m.cfg.AgyBin) + ":" + path
 	}
 	env := []string{"PATH=" + path, "TERM=xterm-256color", "RC_SESSION_ROOT=" + m.cfg.Root}
 	for _, k := range []string{"HOME", "USER", "LOGNAME", "LANG", "LC_ALL", "XDG_RUNTIME_DIR", "DBUS_SESSION_BUS_ADDRESS", "TMUX_TMPDIR"} {

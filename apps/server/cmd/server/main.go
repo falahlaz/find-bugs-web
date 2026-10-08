@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -108,17 +107,12 @@ func serve() error {
 
 	var an analyzer.Analyzer = analyzer.ClaudeCode{Bin: cfg.Claude.Bin, Model: cfg.Claude.Model, Timeout: cfg.Claude.Timeout}
 	if cfg.LogAnalyzer == "antigravity" {
-		// Never hand logs to agy unless its global settings lock its tools down.
-		if err := analyzer.CheckAgyPermissions(filepath.Join(cfg.Agy.StateDir, "settings.json")); err != nil {
-			slog.Error("antigravity log analyzer disabled; using claude", "err", err)
-		} else {
-			agy := analyzer.Antigravity{Bin: cfg.Agy.Bin, Model: cfg.Agy.Model, Timeout: cfg.Agy.Timeout, StateDir: cfg.Agy.StateDir}
-			an = agy
-			if cfg.Agy.Fallback {
-				an = analyzer.Fallback{Primary: agy, Secondary: an, OnFallback: func(err error) {
-					slog.Warn("antigravity log analysis failed; falling back to claude", "err", err)
-				}}
-			}
+		agy := analyzer.Antigravity{Bin: cfg.Agy.Bin, Model: cfg.Agy.Model, Timeout: cfg.Agy.Timeout, StateDir: cfg.Agy.StateDir}
+		an = agy
+		if cfg.Agy.Fallback {
+			an = analyzer.Fallback{Primary: agy, Secondary: an, OnFallback: func(err error) {
+				slog.Warn("antigravity log analysis failed; falling back to claude", "err", err)
+			}}
 		}
 	}
 	var tracer analyzer.Tracer = analyzer.ClaudeCode{Bin: cfg.Claude.Bin, Model: cfg.GitLab.Model, Timeout: cfg.GitLab.TraceTimeout}
@@ -200,7 +194,7 @@ func serve() error {
 	if g.ReposDir != "" {
 		a.Repos = rm
 		a.RC = rcsession.New(rcsession.Config{
-			Script: cfg.RCSession.Script, Launcher: cfg.RCSession.Launcher, ClaudeBin: cfg.Claude.Bin, Root: g.ReposDir,
+			Script: cfg.RCSession.Script, Launcher: cfg.RCSession.Launcher, ClaudeBin: cfg.Claude.Bin, AgyBin: cfg.Agy.Bin, Root: g.ReposDir,
 		})
 		if !a.RC.Enabled() {
 			slog.Info("rc sessions disabled (no rc-session script)", "script", cfg.RCSession.Script)

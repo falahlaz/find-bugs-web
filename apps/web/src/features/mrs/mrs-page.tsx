@@ -92,7 +92,7 @@ function SessionButton({ mr, onChanged }: { mr: MR; onChanged: () => void }) {
   if (session) {
     return session.url ? (
       <a href={session.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline">
-        Buka sesi Claude
+        {session.engine === 'agy' ? 'Buka sesi agy' : 'Buka sesi Claude'}
         <ExternalLink className="size-3.5" aria-hidden />
       </a>
     ) : (
@@ -103,7 +103,7 @@ function SessionButton({ mr, onChanged }: { mr: MR; onChanged: () => void }) {
   }
   return (
     <>
-      <Button size="sm" variant="outline" disabled={start.isPending || !repo.commit} onClick={() => start.mutate(mr.project, { onSuccess: onChanged })}>
+      <Button size="sm" variant="outline" disabled={start.isPending || !repo.commit} onClick={() => start.mutate({ project: mr.project, engine: 'claude' }, { onSuccess: onChanged })}>
         {start.isPending && <Loader2 className="animate-spin" aria-hidden />}
         {start.isPending ? 'Menyambungkan… ±30 dtk' : 'Mulai sesi RC'}
       </Button>

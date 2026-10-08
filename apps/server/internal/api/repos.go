@@ -27,8 +27,8 @@ func (a *API) registerRepoRoutes() {
 		resps: map[int]any{200: ReposResponse{}}, h: a.listRepos})
 	a.add(route{method: "POST", path: "/api/repos", summary: "Clone a GitLab project (in the background)", tag: "repos", opID: "cloneRepo", roles: eng,
 		req: RepoRequest{}, resps: map[int]any{202: RepoCloneView{}}, h: a.cloneRepo})
-	a.add(route{method: "POST", path: "/api/repos/session/start", summary: "Start a Claude Remote Control session in a repo", tag: "repos", opID: "startRepoSession", roles: eng,
-		req: RepoRequest{}, resps: map[int]any{200: RepoSessionResponse{}}, h: a.startRepoSession})
+	a.add(route{method: "POST", path: "/api/repos/session/start", summary: "Start a Remote Control session (Claude or agy) in a repo", tag: "repos", opID: "startRepoSession", roles: eng,
+		req: RepoSessionRequest{}, resps: map[int]any{200: RepoSessionResponse{}}, h: a.startRepoSession})
 	a.add(route{method: "POST", path: "/api/repos/session/stop", summary: "Stop a repo's Remote Control session", tag: "repos", opID: "stopRepoSession", roles: eng,
 		req: RepoRequest{}, resps: map[int]any{200: RepoSessionResponse{}}, h: a.stopRepoSession})
 }
@@ -70,7 +70,7 @@ func repoView(r repos.Repo, sessions map[string]rcsession.Session) RepoView {
 		v.CommittedAt = &t
 	}
 	if s, ok := sessions[r.Dir]; ok {
-		v.Session = &RepoSessionView{Name: s.Name, URL: s.URL, Since: s.Since}
+		v.Session = &RepoSessionView{Name: s.Name, Engine: s.Engine, URL: s.URL, Since: s.Since}
 	}
 	return v
 }
@@ -87,7 +87,7 @@ func (a *API) listRepos(w http.ResponseWriter, r *http.Request) {
 	sessions := a.sessions(r.Context())
 	out := ReposResponse{
 		Repos: []RepoView{}, Clones: []RepoCloneView{}, DefaultGroup: a.Cfg.GitLab.Group,
-		CanClone: a.Cfg.GitLab.CanClone(), CanSession: a.RC.Enabled(),
+		CanClone: a.Cfg.GitLab.CanClone(), CanSession: a.RC.Enabled(), CanAgySession: a.RC.AgyEnabled(),
 	}
 	for _, rp := range list {
 		out.Repos = append(out.Repos, repoView(rp, sessions))
@@ -168,18 +168,14 @@ func (a *API) cloneRepo(w http.ResponseWriter, r *http.Request) {
 }
 
 // sessionRepo finds the repo a session request names.
-func (a *API) sessionRepo(w http.ResponseWriter, r *http.Request) (repos.Repo, bool) {
-	var req RepoRequest
-	if !httpx.Decode(w, r, &req) {
-		return repos.Repo{}, false
-	}
+func (a *API) sessionRepo(w http.ResponseWriter, r *http.Request, project string) (repos.Repo, bool) {
 	list, err := a.Repos.List(r.Context())
 	if err != nil {
 		httpx.Internal(w, r, err)
 		return repos.Repo{}, false
 	}
 	for _, rp := range list {
-		if rp.Project == req.Project {
+		if rp.Project == project {
 			return rp, true
 		}
 	}
@@ -188,18 +184,40 @@ func (a *API) sessionRepo(w http.ResponseWriter, r *http.Request) (repos.Repo, b
 }
 
 func (a *API) startRepoSession(w http.ResponseWriter, r *http.Request) {
-	a.repoSession(w, r, "repo.session_start", a.RC.Start)
+	var req RepoSessionRequest
+	if !httpx.Decode(w, r, &req) {
+		return
+	}
+	engine := req.Engine
+	if engine == "" {
+		engine = rcsession.Claude
+	}
+	if engine != rcsession.Claude && engine != rcsession.Agy {
+		httpx.Error(w, http.StatusBadRequest, "bad_request", "Engine harus claude atau agy.")
+		return
+	}
+	if engine == rcsession.Agy && a.RC.Enabled() && !a.RC.AgyEnabled() {
+		httpx.Error(w, http.StatusNotFound, "agy_disabled", "agy (Antigravity CLI) tidak terpasang di server ini.")
+		return
+	}
+	a.repoSession(w, r, req.Project, "repo.session_start", func(ctx context.Context, dir string) (string, error) {
+		return a.RC.Start(ctx, dir, engine)
+	}, " ("+engine+")")
 }
 
 func (a *API) stopRepoSession(w http.ResponseWriter, r *http.Request) {
-	a.repoSession(w, r, "repo.session_stop", a.RC.Stop)
+	var req RepoRequest
+	if !httpx.Decode(w, r, &req) {
+		return
+	}
+	a.repoSession(w, r, req.Project, "repo.session_stop", a.RC.Stop, "")
 }
 
-func (a *API) repoSession(w http.ResponseWriter, r *http.Request, action string, run func(context.Context, string) (string, error)) {
+func (a *API) repoSession(w http.ResponseWriter, r *http.Request, project, action string, run func(context.Context, string) (string, error), note string) {
 	if !a.sessionsEnabled(w) {
 		return
 	}
-	rp, ok := a.sessionRepo(w, r)
+	rp, ok := a.sessionRepo(w, r, project)
 	if !ok {
 		return
 	}
@@ -208,10 +226,10 @@ func (a *API) repoSession(w http.ResponseWriter, r *http.Request, action string,
 	_ = http.NewResponseController(w).SetWriteDeadline(time.Now().Add(2 * time.Minute))
 	out, err := run(r.Context(), rp.Dir)
 	if err != nil {
-		a.audit(r, action, "failed", rp.Project+": "+err.Error())
+		a.audit(r, action, "failed", rp.Project+note+": "+err.Error())
 		httpx.Error(w, http.StatusBadGateway, "rc_failed", err.Error())
 		return
 	}
-	a.audit(r, action, "ok", rp.Project)
+	a.audit(r, action, "ok", rp.Project+note)
 	httpx.JSON(w, http.StatusOK, RepoSessionResponse{Repo: repoView(rp, a.sessions(r.Context())), Output: out})
 }

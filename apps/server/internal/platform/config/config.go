@@ -115,8 +115,8 @@ type Agy struct {
 	Bin     string
 	Model   string
 	Timeout time.Duration
-	// StateDir is agy's state directory; its settings.json must deny the
-	// tools in analyzer.AgyRequiredDeny.
+	// StateDir is the signed-in agy state directory; log analyses copy its
+	// token into a throwaway HOME with their own locked-down settings.
 	StateDir string
 	// Fallback re-runs a failed agy diagnosis with Claude.
 	Fallback bool

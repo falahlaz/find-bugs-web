@@ -245,11 +245,12 @@ type TraceBranch struct {
 
 // ReposResponse lists the repos under GITLAB_REPOS_DIR.
 type ReposResponse struct {
-	Repos        []RepoView      `json:"repos"`
-	Clones       []RepoCloneView `json:"clones" doc:"Clones running or failed since the server started"`
-	DefaultGroup string          `json:"defaultGroup" doc:"Group of a project given without one"`
-	CanClone     bool            `json:"canClone" doc:"GitLab URL and token are set"`
-	CanSession   bool            `json:"canSession" doc:"The rc-session script is installed"`
+	Repos         []RepoView      `json:"repos"`
+	Clones        []RepoCloneView `json:"clones" doc:"Clones running or failed since the server started"`
+	DefaultGroup  string          `json:"defaultGroup" doc:"Group of a project given without one"`
+	CanClone      bool            `json:"canClone" doc:"GitLab URL and token are set"`
+	CanSession    bool            `json:"canSession" doc:"The rc-session script is installed"`
+	CanAgySession bool            `json:"canAgySession" doc:"agy (Antigravity CLI) sessions can be started too"`
 }
 
 // RepoView is a repo and its Remote Control session, if any.
@@ -263,11 +264,12 @@ type RepoView struct {
 	Session     *RepoSessionView `json:"session,omitempty"`
 }
 
-// RepoSessionView is a running `claude rc` session.
+// RepoSessionView is a running `claude rc` or `agy --remote-control` session.
 type RepoSessionView struct {
-	Name  string    `json:"name" doc:"tmux session name"`
-	URL   string    `json:"url,omitempty" doc:"claude.ai link once connected"`
-	Since time.Time `json:"since"`
+	Name   string    `json:"name" doc:"tmux session name"`
+	Engine string    `json:"engine" enum:"claude,agy"`
+	URL    string    `json:"url,omitempty" doc:"claude.ai or antigravity link once connected"`
+	Since  time.Time `json:"since"`
 }
 
 // RepoCloneView is a clone in progress or one that failed.
@@ -283,6 +285,12 @@ type RepoCloneView struct {
 // default group.
 type RepoRequest struct {
 	Project string `json:"project"`
+}
+
+// RepoSessionRequest starts a session in a repo.
+type RepoSessionRequest struct {
+	Project string `json:"project"`
+	Engine  string `json:"engine,omitempty" enum:"claude,agy" doc:"Default claude"`
 }
 
 // RepoSessionResponse is a repo after starting or stopping its session.

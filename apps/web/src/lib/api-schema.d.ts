@@ -372,7 +372,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Start a Claude Remote Control session in a repo */
+        /** Start a Remote Control session (Claude or agy) in a repo */
         post: operations["startRepoSession"];
         delete?: never;
         options?: never;
@@ -939,17 +939,27 @@ export interface components {
         RepoRequest: {
             project: string;
         };
+        RepoSessionRequest: {
+            /**
+             * @description Default claude
+             * @enum {string}
+             */
+            engine?: "claude" | "agy";
+            project: string;
+        };
         RepoSessionResponse: {
             /** @description What the rc-session script reported */
             output: string;
             repo: components["schemas"]["RepoView"];
         };
         RepoSessionView: {
+            /** @enum {string} */
+            engine: "claude" | "agy";
             /** @description tmux session name */
             name: string;
             /** Format: date-time */
             since: string;
-            /** @description claude.ai link once connected */
+            /** @description claude.ai or antigravity link once connected */
             url?: string;
         };
         RepoView: {
@@ -985,6 +995,8 @@ export interface components {
             reports: components["schemas"]["ReportView"][];
         };
         ReposResponse: {
+            /** @description agy (Antigravity CLI) sessions can be started too */
+            canAgySession: boolean;
             /** @description GitLab URL and token are set */
             canClone: boolean;
             /** @description The rc-session script is installed */
@@ -2003,7 +2015,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["RepoRequest"];
+                "application/json": components["schemas"]["RepoSessionRequest"];
             };
         };
         responses: {

@@ -1,45 +1,45 @@
-# Antigravity log analyzer
+# Antigravity CLI (agy)
 
-`LOG_ANALYZER=antigravity` sends the Splunk log diagnosis to the Antigravity
-CLI (`agy`) instead of Claude, using the Antigravity subscription of the
-Google account that `agy` is signed in with. Code tracing, trace chat and RC
-sessions keep using Claude.
+The server can use the Antigravity CLI (`agy`), signed in with a Google
+account that has an Antigravity subscription, in two places:
+
+- **Log diagnosis** (`LOG_ANALYZER=antigravity`): the Splunk logs are
+  diagnosed by Gemini instead of Claude. Code tracing and trace chat always
+  use Claude.
+- **Repo page sessions**: next to "Mulai sesi Claude" a repo gets "Mulai sesi
+  agy", which runs `agy --remote-control --dangerously-skip-permissions` in
+  tmux through the rc-session skill script (`rc-session.sh start <dir> --agy`).
+  The link opens the conversation on the Antigravity Remote Control dashboard.
+  The button shows when `AGY_BIN` exists.
 
 ## Setup (once, as the user running the server)
 
 1. Install: `curl -fsSL https://antigravity.google/cli/install.sh | bash`
    (installs `~/.local/bin/agy`).
 2. Sign in: run `agy` in a terminal, pick **Google OAuth**, open the URL,
-   paste the code back. `agy models` lists the model slugs for `AGY_MODEL`.
-3. Lock its tools down. `agy` has no per-run tool flag, so the deny rules live
-   in the global `~/.gemini/antigravity-cli/settings.json` (this also applies
-   to any interactive `agy` use on the host):
+   paste the code back, and finish the first-run screens (the data-sharing
+   opt-in is ticked by default). `agy models` lists the slugs for `AGY_MODEL`.
+3. For log diagnosis set `LOG_ANALYZER=antigravity` in the env file and
+   restart.
 
-   ```json
-   {
-     "permissions": {
-       "deny": [
-         "command(*)", "unsandboxed(*)", "read_url(*)", "execute_url(*)", "mcp(*)", "write_file(*)",
-         "read_file(/home/)", "read_file(/root/)", "read_file(/etc/)", "read_file(/proc/)", "read_file(/var/)",
-         "read_file(/opt/)", "read_file(/srv/)", "read_file(/run/)", "read_file(/sys/)", "read_file(/dev/)",
-         "read_file(/mnt/)", "read_file(/media/)", "read_file(/boot/)", "read_file(/usr/)"
-       ]
-     }
-   }
-   ```
+Keep `~/.gemini/antigravity-cli/settings.json` free of deny rules that would
+cripple Remote Control sessions; log diagnosis does not use it.
 
-   The server checks this list (`analyzer.AgyRequiredDeny`) at start-up and
-   keeps Claude if any rule is missing.
-4. Set `LOG_ANALYZER=antigravity` in the env file and restart.
+## How a log diagnosis is isolated
 
-## How a run is isolated
-
+- Each run gets a throwaway `HOME` holding a copy of the sign-in token and
+  its own `settings.json`, which denies commands, web/URL access, MCP, writes
+  and reads outside `/tmp`. `search_web` cannot be denied but only reaches
+  Google, which already receives the logs.
 - The logs are copied into a fresh temp directory holding only `logs.txt`;
   `agy` runs there with `--sandbox` and `--json-schema` for the diagnosis.
-- Commands, web/URL access, MCP and writes are denied; reads outside `/tmp`
-  are denied. `search_web` cannot be denied but only reaches Google, which
-  already receives the logs.
-- `agy` stores each conversation under `~/.gemini/antigravity-cli`; the
-  analyzer deletes it after the run.
+- The throwaway `HOME`, and with it the stored conversation, is deleted
+  after the run.
 - If `agy` fails (quota, sign-in expired, timeout) and `AGY_FALLBACK` is on,
   the job is diagnosed by Claude instead and a warning is logged.
+
+## Model speed
+
+On a two-event log: `gemini-3.8-flash-high` ~230 s (it thinks a lot),
+`-medium` ~97 s, `-low` ~17 s with a shallower answer. The default is
+`-medium` with `AGY_TIMEOUT=4m`.

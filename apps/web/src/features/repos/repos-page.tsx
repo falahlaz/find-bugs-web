@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/ui/page-header'
 import { useTimezone } from '@/features/findbugs/queries'
 import { formatDateTime, formatShort } from '@/lib/format'
-import { useCloneRepo, useRepos, useStartSession, useStopSession, type Repo, type RepoClone } from './queries'
+import { useCloneRepo, useRepos, useStartSession, useStopSession, type Engine, type Repo, type RepoClone } from './queries'
 
 function CloneForm({ defaultGroup }: { defaultGroup: string }) {
   const clone = useCloneRepo()
@@ -66,13 +66,22 @@ function CloneStatus({ c }: { c: RepoClone }) {
   )
 }
 
-function RepoItem({ repo, canSession }: { repo: Repo; canSession: boolean }) {
+const engineName: Record<Engine, string> = { claude: 'Claude', agy: 'agy' }
+
+function RepoItem({ repo, canSession, canAgy }: { repo: Repo; canSession: boolean; canAgy: boolean }) {
   const tz = useTimezone()
   const start = useStartSession()
   const stop = useStopSession()
   const busy = start.isPending || stop.isPending
   const s = repo.session
   const error = start.error ?? stop.error
+  const starting = start.isPending ? start.variables.engine : undefined
+  const startButton = (engine: Engine, variant?: 'outline') => (
+    <Button key={engine} size="sm" variant={variant} disabled={busy || !repo.commit} onClick={() => start.mutate({ project: repo.project, engine })}>
+      {starting === engine && <Loader2 className="animate-spin" aria-hidden />}
+      {starting === engine ? 'Menyambungkan… ±30 dtk' : canAgy ? `Mulai sesi ${engineName[engine]}` : 'Mulai sesi'}
+    </Button>
+  )
 
   return (
     <li className="grid gap-2 border-b py-3 last:border-0 sm:grid-cols-[1fr_auto] sm:items-center">
@@ -81,7 +90,7 @@ function RepoItem({ repo, canSession }: { repo: Repo; canSession: boolean }) {
           <span className="font-mono text-sm font-semibold break-all">{repo.project}</span>
           {s && (
             <Badge tone="success" dot pulse={!s.url}>
-              {s.url ? 'Sesi jalan' : 'Menyambungkan'}
+              {s.url ? `Sesi ${engineName[s.engine]} jalan` : 'Menyambungkan'}
             </Badge>
           )}
           {repo.shallow && <Badge tone="neutral">shallow</Badge>}
@@ -105,7 +114,7 @@ function RepoItem({ repo, canSession }: { repo: Repo; canSession: boolean }) {
             </span>
             {s.url && (
               <a href={s.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-medium text-primary hover:underline">
-                Buka di claude.ai
+                {s.engine === 'agy' ? 'Buka di Antigravity' : 'Buka di claude.ai'}
                 <ExternalLink className="size-3.5" aria-hidden />
               </a>
             )}
@@ -121,17 +130,17 @@ function RepoItem({ repo, canSession }: { repo: Repo; canSession: boolean }) {
               size="sm"
               disabled={busy}
               onClick={() => {
-                if (window.confirm(`Stop sesi ${s.name}? Semua sesi Claude yang dibuka dari situ ikut berhenti.`)) stop.mutate(repo.project)
+                if (window.confirm(`Stop sesi ${s.name}? Semua percakapan ${engineName[s.engine]} yang dibuka dari situ ikut berhenti.`)) stop.mutate(repo.project)
               }}
             >
               {stop.isPending && <Loader2 className="animate-spin" aria-hidden />}
               Stop
             </Button>
           ) : (
-            <Button size="sm" disabled={busy || !repo.commit} onClick={() => start.mutate(repo.project)}>
-              {start.isPending && <Loader2 className="animate-spin" aria-hidden />}
-              {start.isPending ? 'Menyambungkan… ±30 dtk' : 'Mulai sesi'}
-            </Button>
+            <>
+              {startButton('claude')}
+              {canAgy && startButton('agy', 'outline')}
+            </>
           )}
         </div>
       )}
@@ -147,7 +156,7 @@ export function ReposPage() {
     <div className="grid gap-4">
       <PageHeader
         title="Repo"
-        description="Repo service di server. Mulai sesi Claude Remote Control (sama seperti /rc-session) lalu lanjutkan dari claude.ai/code atau aplikasi Claude."
+        description="Repo service di server. Mulai sesi Remote Control Claude (sama seperti /rc-session) lalu lanjutkan dari claude.ai/code atau aplikasi Claude, atau sesi agy lalu lanjutkan dari dashboard Antigravity."
       />
       {data?.canClone && (
         <Card>
@@ -173,7 +182,7 @@ export function ReposPage() {
           )}
           {data && data.repos.length === 0 && <p className="text-sm text-muted-foreground">Belum ada repo.</p>}
           <ul>
-            {data?.repos.map((r) => <RepoItem key={r.project} repo={r} canSession={data.canSession} />)}
+            {data?.repos.map((r) => <RepoItem key={r.project} repo={r} canSession={data.canSession} canAgy={data.canAgySession} />)}
           </ul>
         </CardContent>
       </Card>
