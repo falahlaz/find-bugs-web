@@ -15,6 +15,7 @@ const actionLabel: Record<string, string> = {
   'user.update': 'Ubah user',
   'user.passwd': 'Reset password (CLI)',
   'repo.clone': 'Clone repo',
+  'repo.delete': 'Hapus repo',
   'repo.session_start': 'Mulai sesi rc',
   'repo.session_stop': 'Stop sesi rc',
 }
