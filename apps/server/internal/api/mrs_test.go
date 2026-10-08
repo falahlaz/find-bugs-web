@@ -26,7 +26,15 @@ func TestMRs(t *testing.T) {
 		case "/api/v4/projects/9/merge_requests/1/approvals", "/api/v4/projects/9/merge_requests/2/approvals":
 			fmt.Fprint(w, `{"approved":true,"approvals_required":1}`)
 		case "/api/v4/projects/9/merge_requests/1":
-			fmt.Fprint(w, `{"iid":1,"project_id":9,"title":"X | Falah | a","state":"opened","references":{"full":"grp/svc!1"}}`)
+			if r.Method == http.MethodPut {
+				fmt.Fprint(w, `{"iid":1,"project_id":9,"title":"X | Falah | a","state":"closed","source_branch":"f","target_branch":"main","references":{"full":"grp/svc!1"}}`)
+				return
+			}
+			fmt.Fprint(w, `{"iid":1,"project_id":9,"title":"X | Falah | a","state":"opened","source_branch":"f","target_branch":"main","references":{"full":"grp/svc!1"}}`)
+		case "/api/v4/projects/9/merge_requests/3":
+			fmt.Fprint(w, `{"iid":3,"project_id":9,"title":"X | Budi | c","state":"opened","source_branch":"h","target_branch":"main","references":{"full":"grp/svc!3"}}`)
+		case "/api/v4/projects/9/repository/branches/f":
+			w.WriteHeader(http.StatusNoContent)
 		case "/api/v4/projects/9/merge_requests/2":
 			fmt.Fprint(w, `{"iid":2,"project_id":9,"title":"X | Falah | b","state":"opened","has_conflicts":true,"source_branch":"g","target_branch":"main","references":{"full":"grp/svc!2"}}`)
 		case "/api/v4/projects/9/merge_requests/1/merge":
@@ -77,5 +85,20 @@ func TestMRs(t *testing.T) {
 	es, _ := h.st.ListAudit(context.Background(), 10)
 	if len(es) < 2 || es[0].Action != "mr.merge" || es[0].Result != "error" {
 		t.Fatalf("audit = %+v", es)
+	}
+
+	if code := qa.do("POST", "/api/mrs/9/1/discard", nil, nil); code != 403 {
+		t.Fatalf("QA discard = %d", code)
+	}
+	if code := eng.do("POST", "/api/mrs/9/3/discard", nil, nil); code != 409 {
+		t.Fatalf("other author's discard = %d", code)
+	}
+	var dr MRDiscardResponse
+	if code := eng.do("POST", "/api/mrs/9/1/discard", nil, &dr); code != 200 || !dr.BranchDeleted || dr.MR.State != "closed" {
+		t.Fatalf("discard = %d %+v", code, dr)
+	}
+	es, _ = h.st.ListAudit(context.Background(), 10)
+	if es[0].Action != "mr.discard" || es[0].Result != "ok" {
+		t.Fatalf("discard audit = %+v", es[0])
 	}
 }

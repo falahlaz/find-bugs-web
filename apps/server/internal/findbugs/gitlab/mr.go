@@ -12,7 +12,7 @@ import (
 
 // ErrForbidden means the token may not do what was asked, e.g. merge with a
 // read_api token.
-var ErrForbidden = errors.New("token GitLab tidak punya izin (butuh scope api)")
+var ErrForbidden = errors.New("token GitLab tidak punya izin (butuh scope api, atau branch-nya protected)")
 
 // MergeRequest is the part of a GitLab merge request the MR triage uses.
 type MergeRequest struct {
@@ -164,9 +164,28 @@ func (c *Client) Discussions(ctx context.Context, projectID, iid int64) ([]Discu
 func (c *Client) Merge(ctx context.Context, projectID, iid int64) (MergeRequest, error) {
 	var mr MergeRequest
 	err := c.do(ctx, http.MethodPut, mrPath(projectID, iid)+"/merge", url.Values{"should_remove_source_branch": {"true"}}, &mr)
+	return mr, forbidden(err)
+}
+
+// forbidden turns a 401/403 into ErrForbidden.
+func forbidden(err error) error {
 	var se *StatusError
 	if errors.As(err, &se) && (se.Code == http.StatusUnauthorized || se.Code == http.StatusForbidden) {
-		return mr, fmt.Errorf("%w: %s", ErrForbidden, se.Msg)
+		return fmt.Errorf("%w: %s", ErrForbidden, se.Msg)
 	}
-	return mr, err
+	return err
+}
+
+// Close closes a merge request without merging it.
+func (c *Client) Close(ctx context.Context, projectID, iid int64) (MergeRequest, error) {
+	var mr MergeRequest
+	err := c.do(ctx, http.MethodPut, mrPath(projectID, iid), url.Values{"state_event": {"close"}}, &mr)
+	return mr, forbidden(err)
+}
+
+// DeleteBranch deletes a branch of a project. A protected branch, or one
+// the token may not push to, gets ErrForbidden; a missing one ErrNotFound.
+func (c *Client) DeleteBranch(ctx context.Context, projectID int64, branch string) error {
+	err := c.do(ctx, http.MethodDelete, fmt.Sprintf("/projects/%d/repository/branches/%s", projectID, url.PathEscape(branch)), nil, nil)
+	return forbidden(err)
 }

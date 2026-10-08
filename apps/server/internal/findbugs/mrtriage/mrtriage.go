@@ -20,6 +20,8 @@ type GitLab interface {
 	Approvals(ctx context.Context, projectID, iid int64) (gitlab.Approvals, error)
 	Discussions(ctx context.Context, projectID, iid int64) ([]gitlab.Discussion, error)
 	Merge(ctx context.Context, projectID, iid int64) (gitlab.MergeRequest, error)
+	Close(ctx context.Context, projectID, iid int64) (gitlab.MergeRequest, error)
+	DeleteBranch(ctx context.Context, projectID int64, branch string) error
 }
 
 // Service triages merge requests.
@@ -192,4 +194,42 @@ func (s *Service) Merge(ctx context.Context, projectID, iid int64) (gitlab.Merge
 		return mr, fmt.Errorf("%w: butuh %d approval lagi", ErrNotReady, a.Left)
 	}
 	return s.GL.Merge(ctx, projectID, iid)
+}
+
+// ErrNotDiscardable means a merge request may not be closed and have its
+// branch deleted from here.
+var ErrNotDiscardable = errors.New("MR tidak bisa dihapus dari sini")
+
+// Discard closes one of the author's merge requests (if still open) and
+// deletes its source branch, for MRs opened only for testing. A merged MR,
+// another author's MR, or a source branch that is also the target is
+// refused. A branch that is already gone is not an error; branchDeleted
+// then reports false.
+func (s *Service) Discard(ctx context.Context, projectID, iid int64) (mr gitlab.MergeRequest, branchDeleted bool, err error) {
+	mr, err = s.GL.MergeRequest(ctx, projectID, iid)
+	if err != nil {
+		return mr, false, err
+	}
+	switch {
+	case !strings.Contains(mr.Title, "| "+s.Author+" |"):
+		return mr, false, fmt.Errorf("%w: bukan MR %s", ErrNotDiscardable, s.Author)
+	case mr.State == "merged":
+		return mr, false, fmt.Errorf("%w: sudah di-merge", ErrNotDiscardable)
+	case mr.SourceBranch == "" || mr.SourceBranch == mr.TargetBranch:
+		return mr, false, fmt.Errorf("%w: source branch %q tidak aman dihapus", ErrNotDiscardable, mr.SourceBranch)
+	}
+	if mr.State == "opened" {
+		closed, err := s.GL.Close(ctx, projectID, iid)
+		if err != nil {
+			return mr, false, err
+		}
+		mr = closed
+	}
+	switch err := s.GL.DeleteBranch(ctx, projectID, mr.SourceBranch); {
+	case errors.Is(err, gitlab.ErrNotFound):
+		return mr, false, nil
+	case err != nil:
+		return mr, false, fmt.Errorf("MR sudah ditutup, tapi branch %s gagal dihapus: %w", mr.SourceBranch, err)
+	}
+	return mr, true, nil
 }

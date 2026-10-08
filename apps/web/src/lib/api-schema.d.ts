@@ -294,6 +294,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/mrs/{project}/{iid}/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close an MR without merging and delete its source branch */
+        post: operations["discardMR"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/mrs/{project}/{iid}/merge": {
         parameters: {
             query?: never;
@@ -846,6 +863,10 @@ export interface components {
         };
         MRConflictsResponse: {
             files: string[];
+        };
+        MRDiscardResponse: {
+            branchDeleted: boolean;
+            mr: components["schemas"]["MRView"];
         };
         MRMergeResponse: {
             mr: components["schemas"]["MRView"];
@@ -1805,6 +1826,38 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MRConflictsResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    discardMR: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project: string;
+                iid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MRDiscardResponse"];
                 };
             };
             /** @description Error */

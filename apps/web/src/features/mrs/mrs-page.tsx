@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { ArrowRight, Check, ClipboardCopy, ExternalLink, Loader2, RefreshCw } from 'lucide-react'
+import { ArrowRight, Check, ClipboardCopy, ExternalLink, Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { Alert } from '@/components/ui/alert'
@@ -14,7 +14,7 @@ import { useCloneRepo, useStartSession } from '@/features/repos/queries'
 import { formatDateTime, formatShort } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { sessionPrompt } from './prompt'
-import { mrCommentsQuery, mrConflictsQuery, mrKey, useMergeMR, useMRComments, useMRConflicts, useMRs, type MR, type MRState } from './queries'
+import { mrCommentsQuery, mrConflictsQuery, mrKey, useDiscardMR, useMergeMR, useMRComments, useMRConflicts, useMRs, type MR, type MRState } from './queries'
 
 // GitLab statuses under which has_conflicts may be out of date.
 const staleStatus = new Set(['checking', 'unchecked', 'preparing', 'approvals_syncing'])
@@ -226,10 +226,62 @@ function WorkTools({ mr, onChanged }: { mr: MR; onChanged: () => void }) {
   )
 }
 
+/**
+ * Inline confirmation for closing an MR and deleting its source branch,
+ * for MRs opened only for testing.
+ */
+function DiscardConfirm({ mr, onCancel, onChanged }: { mr: MR; onCancel: () => void; onChanged: () => void }) {
+  const discard = useDiscardMR()
+  if (discard.isSuccess) {
+    return (
+      <Alert tone="info">
+        !{mr.iid} ditutup
+        {discard.data.branchDeleted ? (
+          <>
+            {' '}dan branch <span className="font-mono">{mr.source}</span> dihapus.
+          </>
+        ) : (
+          <>
+            ; branch <span className="font-mono">{mr.source}</span> sudah tidak ada.
+          </>
+        )}
+      </Alert>
+    )
+  }
+  return (
+    <div role="alertdialog" aria-label={`Hapus !${mr.iid}`} className="grid gap-2 rounded-md border border-destructive/50 bg-destructive/10 p-3 text-sm">
+      <p>
+        {mr.state === 'opened' ? (
+          <>
+            Tutup <b>!{mr.iid}</b> tanpa merge dan hapus branch <span className="font-mono break-all">{mr.source}</span> dari GitLab?
+          </>
+        ) : (
+          <>
+            Hapus branch <span className="font-mono break-all">{mr.source}</span> milik <b>!{mr.iid}</b> dari GitLab?
+          </>
+        )}{' '}
+        Commit yang belum di-merge di branch itu ikut hilang. GitLab tidak mengizinkan token ini menghapus MR-nya, jadi MR-nya tetap ada dengan status closed.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button size="sm" variant="destructive" disabled={discard.isPending} onClick={() => discard.mutate(mr, { onSuccess: () => setTimeout(onChanged, 1500) })}>
+          {discard.isPending && <Loader2 className="animate-spin" aria-hidden />}
+          Ya, tutup & hapus branch
+        </Button>
+        <Button size="sm" variant="outline" disabled={discard.isPending} onClick={onCancel}>
+          Batal
+        </Button>
+      </div>
+      {discard.error && <p className="text-destructive break-words">{discard.error.message}</p>}
+    </div>
+  )
+}
+
 function MRRow({ mr, status, onMerge, onChanged }: { mr: MR; status?: MergeStatus; onMerge?: () => void; onChanged: () => void }) {
   const tz = useTimezone()
   const [showComments, setShowComments] = useState(false)
+  const [discarding, setDiscarding] = useState(false)
   const open = mr.state === 'opened'
+  const canDiscard = mr.state !== 'merged'
   const merging = status?.state === 'merging'
 
   return (
@@ -265,18 +317,32 @@ function MRRow({ mr, status, onMerge, onChanged }: { mr: MR; status?: MergeStatu
             )}
           </div>
         </div>
-        {onMerge && (
+        {(onMerge || canDiscard) && (
           <div className="flex items-center gap-2 sm:justify-end">
-            {status?.state === 'ok' && <Badge tone="success">merged</Badge>}
-            {status?.state !== 'ok' && (
-              <Button size="sm" disabled={merging} onClick={onMerge}>
+            {onMerge && status?.state === 'ok' && <Badge tone="success">merged</Badge>}
+            {onMerge && status?.state !== 'ok' && (
+              <Button size="sm" disabled={merging || discarding} onClick={onMerge}>
                 {merging && <Loader2 className="animate-spin" aria-hidden />}
                 Merge
+              </Button>
+            )}
+            {canDiscard && status?.state !== 'ok' && (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-destructive"
+                disabled={merging || discarding}
+                onClick={() => setDiscarding(true)}
+                title="Tutup MR tanpa merge dan hapus source branch-nya"
+              >
+                <Trash2 aria-hidden />
+                Hapus
               </Button>
             )}
           </div>
         )}
       </div>
+      {discarding && <DiscardConfirm mr={mr} onCancel={() => setDiscarding(false)} onChanged={onChanged} />}
       {status?.state === 'error' && <p className="text-sm text-destructive break-words">{status.message}</p>}
       {showComments && <CommentsList mr={mr} />}
       {open && <WorkTools mr={mr} onChanged={onChanged} />}

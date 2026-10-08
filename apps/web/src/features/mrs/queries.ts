@@ -51,3 +51,12 @@ export function useMergeMR() {
     onSettled: () => void qc.invalidateQueries({ queryKey: ['audit'] }),
   })
 }
+
+/** Closes an MR and deletes its source branch; the caller refetches. */
+export function useDiscardMR() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (mr: MR) => unwrap(await api.POST('/api/mrs/{project}/{iid}/discard', { params: mrPath(mr) })),
+    onSettled: () => void qc.invalidateQueries({ queryKey: ['audit'] }),
+  })
+}
