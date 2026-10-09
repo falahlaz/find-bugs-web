@@ -335,6 +335,91 @@
         ],
         "type": "object"
       },
+      "EngineerNote": {
+        "properties": {
+          "aiVerdict": {
+            "enum": [
+              "ok",
+              "overridden",
+              "unchecked"
+            ],
+            "type": "string"
+          },
+          "cause": {
+            "type": "string"
+          },
+          "causeText": {
+            "type": "string"
+          },
+          "component": {
+            "type": "string"
+          },
+          "componentKey": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "errorSource": {
+            "type": "string"
+          },
+          "errorType": {
+            "type": "string"
+          },
+          "errorTypeKey": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "qaRecommendation": {
+            "type": "string"
+          },
+          "qaText": {
+            "type": "string"
+          },
+          "sourceJobId": {
+            "format": "int64",
+            "nullable": true,
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "active",
+              "archived"
+            ],
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "aiVerdict",
+          "cause",
+          "causeText",
+          "component",
+          "componentKey",
+          "createdAt",
+          "errorType",
+          "errorTypeKey",
+          "id",
+          "qaRecommendation",
+          "qaText",
+          "state",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
       "EnvironmentsResponse": {
         "properties": {
           "defaultTimeRange": {
@@ -943,6 +1028,234 @@
         ],
         "type": "object"
       },
+      "NoteCheckRequest": {
+        "properties": {
+          "cause": {
+            "type": "string"
+          },
+          "jobId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "noteId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "qaRecommendation": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "cause",
+          "qaRecommendation"
+        ],
+        "type": "object"
+      },
+      "NoteListResponse": {
+        "properties": {
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/EngineerNote"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "notes"
+        ],
+        "type": "object"
+      },
+      "NoteReviewResponse": {
+        "properties": {
+          "causeText": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "qaText": {
+            "type": "string"
+          },
+          "questions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "suggestions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "verdict": {
+            "enum": [
+              "ok",
+              "needs_revision"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "causeText",
+          "qaText",
+          "questions",
+          "suggestions",
+          "verdict"
+        ],
+        "type": "object"
+      },
+      "NoteSaveRequest": {
+        "properties": {
+          "aiVerdict": {
+            "enum": [
+              "ok",
+              "overridden",
+              "unchecked"
+            ],
+            "type": "string"
+          },
+          "allErrorTypes": {
+            "type": "boolean"
+          },
+          "cause": {
+            "type": "string"
+          },
+          "causeText": {
+            "type": "string"
+          },
+          "jobId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "noteId": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "qaRecommendation": {
+            "type": "string"
+          },
+          "qaText": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "aiVerdict",
+          "cause",
+          "qaRecommendation"
+        ],
+        "type": "object"
+      },
+      "NoteVersion": {
+        "properties": {
+          "aiVerdict": {
+            "type": "string"
+          },
+          "cause": {
+            "type": "string"
+          },
+          "causeText": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "qaRecommendation": {
+            "type": "string"
+          },
+          "qaText": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "aiVerdict",
+          "cause",
+          "causeText",
+          "createdAt",
+          "id",
+          "qaRecommendation",
+          "qaText"
+        ],
+        "type": "object"
+      },
+      "NoteVersionsResponse": {
+        "properties": {
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/NoteVersion"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "versions"
+        ],
+        "type": "object"
+      },
+      "NoteView": {
+        "properties": {
+          "aiVerdict": {
+            "enum": [
+              "ok",
+              "overridden",
+              "unchecked"
+            ],
+            "type": "string"
+          },
+          "allErrorTypes": {
+            "description": "The note covers every error type of the component",
+            "type": "boolean"
+          },
+          "cause": {
+            "type": "string"
+          },
+          "causeText": {
+            "type": "string"
+          },
+          "component": {
+            "type": "string"
+          },
+          "errorType": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "qaRecommendation": {
+            "type": "string"
+          },
+          "qaText": {
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "aiVerdict",
+          "allErrorTypes",
+          "causeText",
+          "component",
+          "errorType",
+          "id",
+          "qaText",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
       "OKResponse": {
         "properties": {
           "ok": {
@@ -1259,6 +1572,14 @@
             "allOf": [
               {
                 "$ref": "#/components/schemas/CodeTrace"
+              }
+            ],
+            "nullable": true
+          },
+          "engineerNote": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NoteView"
               }
             ],
             "nullable": true
@@ -3286,6 +3607,261 @@
         "summary": "Merge an MR that is still ready and remove its source branch",
         "tags": [
           "mrs"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
+      }
+    },
+    "/api/notes": {
+      "get": {
+        "operationId": "listNotes",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteListResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Engineer notes",
+        "tags": [
+          "notes"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
+      },
+      "post": {
+        "operationId": "saveNote",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteSaveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteView"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteView"
+                }
+              }
+            },
+            "description": "Created"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Create or update the engineer note for a job's error",
+        "tags": [
+          "notes"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
+      }
+    },
+    "/api/notes/check": {
+      "post": {
+        "operationId": "checkNote",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NoteCheckRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteReviewResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "AI review of an engineer note before saving",
+        "tags": [
+          "notes"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
+      }
+    },
+    "/api/notes/{id}/archive": {
+      "post": {
+        "operationId": "archiveNote",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OKResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Archive an engineer note",
+        "tags": [
+          "notes"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
+      }
+    },
+    "/api/notes/{id}/versions": {
+      "get": {
+        "operationId": "noteVersions",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "int64",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NoteVersionsResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Revisions of an engineer note",
+        "tags": [
+          "notes"
         ],
         "x-roles": [
           "engineer"

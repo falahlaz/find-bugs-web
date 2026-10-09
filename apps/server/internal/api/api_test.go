@@ -73,7 +73,7 @@ func newHarness(t *testing.T) *harness {
 		Cfg: cfg, Store: st, Auth: auth.NewService(st, time.Hour, false),
 		Jobs: &jobs.Service{Store: st, Environments: []string{"prod", "dev"}, Header: "X-Transaction-ID",
 			Limits: store.Limits{Total: 10, PerUser: 3}, DedupWindow: 24 * time.Hour, Wake: wk.Wake},
-		VPN: gp, Splunk: sp, Monitor: mon, Version: "test", LogDir: filepath.Join(dir, "logs"),
+		VPN: gp, Splunk: sp, Monitor: mon, Version: "test", LogDir: filepath.Join(dir, "logs"), Notes: analyzer.Fake{},
 		Web: fstest.MapFS{"index.html": {Data: []byte("<html>app</html>")}, "assets/app.js": {Data: []byte("js")}},
 	}
 	srv := httptest.NewServer(a.Handler())

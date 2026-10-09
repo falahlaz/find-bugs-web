@@ -260,6 +260,7 @@ export function ResultView({
   engineer,
   animate = false,
   trace,
+  note,
   jobId,
 }: {
   result: Result
@@ -269,6 +270,8 @@ export function ResultView({
   jobId?: number
   /** Replaces the plain code trace view (the job page adds the chat). */
   trace?: ReactNode
+  /** The engineers' recommendation, shown under the diagnosis. */
+  note?: ReactNode
 }) {
   return (
     <div className="grid gap-4">
@@ -277,6 +280,7 @@ export function ResultView({
           <Diagnosis key={String(animate)} result={result} animate={animate} />
         </CardContent>
       </Card>
+      {note}
       {engineer && (
         <Card>
           <CardHeader>

@@ -10,6 +10,14 @@ esac
 # Prove the sandbox and schema flags are set, the prompt carries the
 # instructions and the log file sits in the working directory.
 case "$*" in *"--json-schema {"*"--sandbox --disable-slash-commands --print "*) ;; *) echo "flags missing" >&2; exit 3 ;; esac
+# A note review: no logs, just the note, answered under the review schema.
+case "$*" in *'"verdict":'*"<engineer_cause>"*)
+	[ -z "$(ls -A)" ] || { echo "note review dir not empty" >&2; exit 10; }
+	grep -q '"command(\*)"' "$HOME/.gemini/antigravity-cli/settings.json" || { echo "settings missing" >&2; exit 9; }
+	printf '{"conversation_id":"%s","status":"SUCCESS","response":"done","structured_output":%s}\n' "$id" \
+		'{"verdict":"ok","questions":[],"suggestions":[],"cause_text":"Pod TIBCO mati.","qa_text":"- Coba lagi 10 menit."}'
+	exit 0 ;;
+esac
 case "$*" in *"Only use the view_file tool"*"Transaction ID: abc-1"*) ;; *) echo "prompt missing" >&2; exit 4 ;; esac
 grep -q "ERROR 504" logs.txt || { echo "logs.txt missing" >&2; exit 5; }
 # A throwaway HOME, signed in, with the locked-down settings.

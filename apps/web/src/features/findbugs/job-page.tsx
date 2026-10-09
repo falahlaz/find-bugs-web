@@ -5,6 +5,7 @@ import { useAuth } from '@/app/auth-context'
 import { Alert } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { EngineerNoteCard } from '@/features/notes/engineer-note-card'
 import { ApiError } from '@/lib/api'
 import { formatDateTime } from '@/lib/format'
 import { notify } from '@/lib/notify'
@@ -172,6 +173,7 @@ function JobDetail({ id }: { id: number }) {
           animate={justFinished}
           jobId={id}
           trace={engineer && result.codeTrace ? <TraceSection jobId={id} initial={result.codeTrace} /> : undefined}
+          note={<EngineerNoteCard jobId={id} result={result} engineer={engineer} />}
         />
       )}
       {isFinal(status) && (

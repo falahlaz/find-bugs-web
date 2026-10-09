@@ -18,6 +18,9 @@ const actionLabel: Record<string, string> = {
   'repo.delete': 'Hapus repo',
   'repo.session_start': 'Mulai sesi rc',
   'repo.session_stop': 'Stop sesi rc',
+  'note.create': 'Tambah rekomendasi',
+  'note.update': 'Ubah rekomendasi',
+  'note.archive': 'Arsipkan rekomendasi',
 }
 
 function resultTone(r: string) {

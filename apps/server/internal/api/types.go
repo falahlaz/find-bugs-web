@@ -83,6 +83,9 @@ type Result struct {
 	// CodeTrace is where an internal error was traced to in the service
 	// code (engineers only).
 	CodeTrace *store.CodeTrace `json:"codeTrace,omitempty"`
+	// EngineerNote is the engineers' recommendation for this error, matched
+	// by failed component and error type, if there is one.
+	EngineerNote *NoteView `json:"engineerNote,omitempty"`
 }
 
 // JobListResponse is a page of jobs.
@@ -398,4 +401,65 @@ type MRMergeResponse struct {
 type MRDiscardResponse struct {
 	MR            MRView `json:"mr"`
 	BranchDeleted bool   `json:"branchDeleted"`
+}
+
+// NoteView is an engineer note as shown on a job. QA users get the rewrite
+// for QA; engineers also get the original answers.
+type NoteView struct {
+	ID            int64     `json:"id"`
+	Component     string    `json:"component"`
+	ErrorType     string    `json:"errorType"`
+	AllErrorTypes bool      `json:"allErrorTypes" doc:"The note covers every error type of the component"`
+	CauseText     string    `json:"causeText"`
+	QAText        string    `json:"qaText"`
+	AIVerdict     string    `json:"aiVerdict" enum:"ok,overridden,unchecked"`
+	UpdatedBy     string    `json:"updatedBy,omitempty"`
+	UpdatedAt     time.Time `json:"updatedAt"`
+	// Engineers only.
+	Cause            string `json:"cause,omitempty"`
+	QARecommendation string `json:"qaRecommendation,omitempty"`
+}
+
+// NoteCheckRequest asks the AI to review a note on a job's error, or an
+// edit of note noteId without a job.
+type NoteCheckRequest struct {
+	JobID            int64  `json:"jobId,omitempty"`
+	NoteID           int64  `json:"noteId,omitempty"`
+	Cause            string `json:"cause"`
+	QARecommendation string `json:"qaRecommendation"`
+}
+
+// NoteReviewResponse is the AI review of a note.
+type NoteReviewResponse struct {
+	Verdict     string   `json:"verdict" enum:"ok,needs_revision"`
+	Questions   []string `json:"questions"`
+	Suggestions []string `json:"suggestions"`
+	CauseText   string   `json:"causeText"`
+	QAText      string   `json:"qaText"`
+	Model       string   `json:"model,omitempty"`
+}
+
+// NoteSaveRequest saves a note: noteId updates that note (jobId is then
+// optional), otherwise the job's component and error type pick the note to
+// create or update. causeText and qaText are the AI rewrite; with aiVerdict
+// "unchecked" the original answers are shown instead.
+type NoteSaveRequest struct {
+	JobID            int64  `json:"jobId,omitempty"`
+	NoteID           int64  `json:"noteId,omitempty"`
+	Cause            string `json:"cause"`
+	QARecommendation string `json:"qaRecommendation"`
+	CauseText        string `json:"causeText,omitempty"`
+	QAText           string `json:"qaText,omitempty"`
+	AIVerdict        string `json:"aiVerdict" enum:"ok,overridden,unchecked"`
+	AllErrorTypes    bool   `json:"allErrorTypes,omitempty"`
+}
+
+// NoteListResponse lists engineer notes.
+type NoteListResponse struct {
+	Notes []store.EngineerNote `json:"notes"`
+}
+
+// NoteVersionsResponse lists a note's revisions, newest first.
+type NoteVersionsResponse struct {
+	Versions []store.NoteVersion `json:"versions"`
 }
