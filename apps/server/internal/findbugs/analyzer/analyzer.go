@@ -65,7 +65,7 @@ Classify the error source as one of:
 If the logs contain ESB or TIBCO errors, treat that as the root cause — even if the internal service also returned a 500. The internal 500 is a consequence of the downstream failure, not the root cause.
 
 If the logs contain ESB (Enterprise Service Bus) errors:
-- Put the ESB error message in the "error_type" field
+- Put the ESB error code (when the response has one) followed by the ESB error message in the "error_type" field
 - Put the ESB endpoint URL in the "failed_component" field
 - Include the full ESB response body in the "likely_cause" field
 - Include the HTTP status code and any correlation IDs in the "suggested_action" field
@@ -92,7 +92,7 @@ Analyze the logs and respond in the following JSON format only, no other text:
 
 {
   "summary": "one or two sentences in Bahasa Indonesia describing what happened",
-  "error_type": "e.g. NullPointerException, TimeoutError, 404, etc.",
+  "error_type": "the error code first, as it appears in the logs: an application error code (e.g. SYS-UXP-0021), else the HTTP status (e.g. 503), else the exception class (e.g. NullPointerException); optionally followed by \": \" and the error message",
   "failed_component": "the service, class, function, or endpoint where it failed",
   "likely_cause": "your best diagnosis of root cause based on the logs, in Bahasa Indonesia",
   "severity": "low | medium | high | critical",

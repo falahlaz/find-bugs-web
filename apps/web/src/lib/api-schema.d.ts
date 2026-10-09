@@ -873,31 +873,6 @@ export interface components {
             role: "qa" | "engineer";
             username: string;
         };
-        EngineerNote: {
-            /** @enum {string} */
-            aiVerdict: "ok" | "overridden" | "unchecked";
-            cause: string;
-            causeText: string;
-            component: string;
-            componentKey: string;
-            /** Format: date-time */
-            createdAt: string;
-            createdBy?: string;
-            errorSource?: string;
-            errorType: string;
-            errorTypeKey: string;
-            /** Format: int64 */
-            id: number;
-            qaRecommendation: string;
-            qaText: string;
-            /** Format: int64 */
-            sourceJobId?: number | null;
-            /** @enum {string} */
-            state: "active" | "archived";
-            /** Format: date-time */
-            updatedAt: string;
-            updatedBy?: string;
-        };
         EnvironmentsResponse: {
             defaultTimeRange: string;
             environments: string[];
@@ -1081,8 +1056,43 @@ export interface components {
             noteId?: number;
             qaRecommendation: string;
         };
+        NoteListItem: {
+            /** @enum {string} */
+            aiVerdict: "ok" | "overridden" | "unchecked";
+            cause: string;
+            causeText: string;
+            component: string;
+            componentKey: string;
+            /** Format: date-time */
+            createdAt: string;
+            createdBy?: string;
+            errorSource?: string;
+            errorType: string;
+            errorTypeKey: string;
+            /** Format: int64 */
+            id: number;
+            /**
+             * Format: date-time
+             * @description When the newest of those jobs was diagnosed
+             */
+            lastMatchedAt?: string | null;
+            /**
+             * Format: int64
+             * @description Diagnosed jobs the active note shows on, within the diagnosis retention
+             */
+            matchedJobs: number;
+            qaRecommendation: string;
+            qaText: string;
+            /** Format: int64 */
+            sourceJobId?: number | null;
+            /** @enum {string} */
+            state: "active" | "archived";
+            /** Format: date-time */
+            updatedAt: string;
+            updatedBy?: string;
+        };
         NoteListResponse: {
-            notes: components["schemas"]["EngineerNote"][];
+            notes: components["schemas"]["NoteListItem"][];
         };
         NoteReviewResponse: {
             causeText: string;

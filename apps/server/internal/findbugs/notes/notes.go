@@ -54,9 +54,47 @@ func ComponentKey(component string) string {
 	return "/" + strings.Join(segs, "/")
 }
 
-// ErrorTypeKey normalizes an error type.
+var (
+	htmlTag = regexp.MustCompile(`<[^>]*>`)
+	// appCode is an application error code such as SYS-UXP-0021 or
+	// 30RV-0006: dash-joined parts with a letter, ending in 3+ digits.
+	appCode = regexp.MustCompile(`(?:^|[^a-z0-9-])([a-z0-9]*[a-z][a-z0-9]*(?:-[a-z0-9]+)*-\d{3,})(?:$|[^a-z0-9-])`)
+	// httpStatus is a leading HTTP status and its standard reason phrase,
+	// as in "HTTP 400 Bad Request" (matched after punctuation is removed).
+	httpStatus = regexp.MustCompile(`^(?:http )?([1-5]\d\d)(?: (?:bad request|unauthorized|forbidden|not found|method not allowed|request timeout|conflict|` +
+		`unprocessable entity|too many requests|internal server error|not implemented|bad gateway|service unavailable|gateway timeout))?(?: |$)`)
+	// labeledCode is a code the error message names, as in "(error code 3002)".
+	labeledCode = regexp.MustCompile(`\b(?:status |error )?code (\w+)`)
+	// qualifiedClass is an exception class with its package, as in
+	// java.lang.NullPointerException.
+	qualifiedClass = regexp.MustCompile(`\b(?:[a-z_][a-z0-9_]*\.)+([a-z][a-z0-9_]*(?:exception|error))\b`)
+	nonWord        = regexp.MustCompile(`[^\p{L}\p{N}]+`)
+)
+
+// ErrorTypeKey normalizes an error type to the code inside it, since the
+// model writes the same error in different ways: an application code
+// ("SYS-UXP-0021: Internal Application Error…" → "sys-uxp-0021"), else a
+// leading HTTP status without its reason phrase, followed by the code or
+// message after it ("HTTP 400 Bad Request" → "400", "400 - … (error code
+// 3002)" → "400 3002"), else the words without punctuation or exception
+// package ("cache_miss" → "cache miss"). A status alone stays apart from a
+// status with a message, since one endpoint fails with a status for
+// different reasons.
 func ErrorTypeKey(errorType string) string {
-	return spaces.ReplaceAllString(strings.ToLower(strings.TrimSpace(errorType)), " ")
+	s := strings.ToLower(htmlTag.ReplaceAllString(errorType, " "))
+	if m := appCode.FindStringSubmatch(s); m != nil {
+		return m[1]
+	}
+	s = qualifiedClass.ReplaceAllString(s, "$1")
+	s = strings.TrimSpace(nonWord.ReplaceAllString(s, " "))
+	if m := httpStatus.FindStringSubmatch(s); m != nil {
+		rest := s[len(m[0]):]
+		if c := labeledCode.FindStringSubmatch(rest); c != nil {
+			rest = c[1]
+		}
+		return strings.TrimSpace(m[1] + " " + rest)
+	}
+	return s
 }
 
 // Keys returns the note keys for a diagnosis; anyType asks for the key of a
