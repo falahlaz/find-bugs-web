@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -34,10 +35,11 @@ var RequiredCookies = []string{"splunkd_8008", "session_id_8008", "splunkweb_csr
 
 // Errors.
 var (
-	ErrSessionExpired = errors.New("splunk session expired")
-	ErrNoSession      = errors.New("splunk session file missing or invalid")
-	ErrReauthBusy     = errors.New("splunk re-auth already running")
-	ErrUnknownEnv     = errors.New("unknown environment")
+	ErrSessionExpired  = errors.New("splunk session expired")
+	ErrNoSession       = errors.New("splunk session file missing or invalid")
+	ErrReauthBusy      = errors.New("splunk re-auth already running")
+	ErrUnknownEnv      = errors.New("unknown environment")
+	ErrInvalidPassword = errors.New("password is empty or contains a line break")
 )
 
 // Search outcomes.
@@ -88,6 +90,9 @@ type SessionInfo struct {
 	LastReauthAt  *time.Time `json:"lastReauthAt,omitempty"`
 	LastReauthOK  *bool      `json:"lastReauthOk,omitempty"`
 	LastReauthLog []string   `json:"lastReauthLog,omitempty"`
+	// PasswordUpdatedAt is when the SSO password was last set from the web;
+	// nil means the login script uses SPLUNK_SSO_PASSWORD from the env.
+	PasswordUpdatedAt *time.Time `json:"passwordUpdatedAt,omitempty"`
 }
 
 // Client talks to Splunk. It is safe for concurrent use.
@@ -178,7 +183,41 @@ func (c *Client) Info() SessionInfo {
 	defer c.mu.RUnlock()
 	info := c.info
 	info.LastReauthLog = append([]string(nil), c.info.LastReauthLog...)
+	if st, err := os.Stat(c.passwordPath()); err == nil {
+		t := st.ModTime()
+		info.PasswordUpdatedAt = &t
+	}
 	return info
+}
+
+// passwordPath holds the SSO password set from the web; it overrides
+// SPLUNK_SSO_PASSWORD so the monthly reset needs no restart.
+func (c *Client) passwordPath() string {
+	return filepath.Join(filepath.Dir(c.cfg.SessionPath), "splunk_sso_password")
+}
+
+// SetPassword stores the SSO password used by the next ReAuth.
+func (c *Client) SetPassword(pw string) error {
+	if strings.TrimSpace(pw) == "" || strings.ContainsAny(pw, "\r\n\x00") {
+		return ErrInvalidPassword
+	}
+	path := c.passwordPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".splunk_sso_password-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.WriteString(pw); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }
 
 func (c *Client) do(ctx context.Context, method, path string, form url.Values, query url.Values) (*http.Response, error) {
@@ -495,6 +534,9 @@ func (c *Client) ReAuth(ctx context.Context) error {
 	defer cancel()
 	cmd := exec.CommandContext(ctx, c.cfg.LoginCommand[0], c.cfg.LoginCommand[1:]...)
 	cmd.Env = append(os.Environ(), "SPLUNK_API_SESSION_PATH="+c.cfg.SessionPath, "SPLUNK_URL="+c.cfg.URL)
+	if pw, err := os.ReadFile(c.passwordPath()); err == nil && len(pw) > 0 {
+		cmd.Env = append(cmd.Env, "SPLUNK_SSO_PASSWORD="+string(pw)) // last value wins
+	}
 	// Own process group so a timeout also kills Xvfb and Chromium.
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error { return syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL) }

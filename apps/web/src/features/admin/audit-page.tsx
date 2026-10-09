@@ -11,6 +11,7 @@ const actionLabel: Record<string, string> = {
   'vpn.callback': 'VPN callback',
   'vpn.disconnect': 'VPN disconnect',
   'splunk.reauth': 'Splunk re-auth',
+  'splunk.password': 'Splunk password SSO diganti',
   'user.create': 'Tambah user',
   'user.update': 'Ubah user',
   'user.passwd': 'Reset password (CLI)',

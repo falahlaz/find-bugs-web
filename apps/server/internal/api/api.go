@@ -46,6 +46,7 @@ type VPN interface {
 // Splunk is the subset of splunk.Client used by the API.
 type Splunk interface {
 	Info() splunk.SessionInfo
+	SetPassword(string) error
 }
 
 // API wires handlers to services.
@@ -201,6 +202,8 @@ func (a *API) registerRoutes() {
 		resps: map[int]any{200: SplunkSummary{}}, h: a.splunkStatus})
 	a.add(route{method: "POST", path: "/api/splunk/reauth", menu: store.MenuKoneksi, summary: "Start SSO re-auth (waits for 2FA in background)", tag: "splunk", opID: "splunkReauth",
 		resps: map[int]any{202: SplunkSummary{}}, h: a.splunkReauth})
+	a.add(route{method: "PUT", path: "/api/splunk/password", menu: store.MenuKoneksi, summary: "Set the SSO password used by re-auth (write-only)", tag: "splunk", opID: "splunkSetPassword",
+		req: SplunkPasswordRequest{}, resps: map[int]any{200: SplunkSummary{}}, h: a.splunkSetPassword})
 
 	a.add(route{method: "GET", path: "/api/users", summary: "List users", tag: "users", opID: "listUsers", roles: []string{engineer},
 		resps: map[int]any{200: UserListResponse{}}, h: a.listUsers})
@@ -679,6 +682,24 @@ func (a *API) splunkReauth(w http.ResponseWriter, r *http.Request) {
 	// Give the goroutine a moment to flip Reauthing so the response reflects it.
 	time.Sleep(50 * time.Millisecond)
 	httpx.JSON(w, http.StatusAccepted, a.splunkSummary())
+}
+
+func (a *API) splunkSetPassword(w http.ResponseWriter, r *http.Request) {
+	var req SplunkPasswordRequest
+	if !httpx.Decode(w, r, &req) {
+		return
+	}
+	if err := a.Splunk.SetPassword(req.Password); err != nil {
+		if errors.Is(err, splunk.ErrInvalidPassword) {
+			httpx.Error(w, http.StatusBadRequest, "invalid_password", "Password kosong atau berisi baris baru.")
+			return
+		}
+		slog.Error("splunk set password", "err", err)
+		httpx.Error(w, http.StatusInternalServerError, "internal", "Gagal menyimpan password.")
+		return
+	}
+	a.audit(r, "splunk.password", "ok", "")
+	httpx.JSON(w, http.StatusOK, a.splunkSummary())
 }
 
 // --- users ---

@@ -136,6 +136,44 @@ J
 	}
 }
 
+func TestSetPasswordOverridesEnv(t *testing.T) {
+	c, _ := newClient(t, "http://x")
+	t.Setenv("SPLUNK_SSO_PASSWORD", "old-from-env")
+	got := filepath.Join(t.TempDir(), "pw")
+	script := filepath.Join(t.TempDir(), "login.sh")
+	os.WriteFile(script, []byte(`#!/bin/sh
+printf '%s' "$SPLUNK_SSO_PASSWORD" > "`+got+`"
+cat > "$SPLUNK_API_SESSION_PATH" <<'J'
+{"cookies":{"splunkd_8008":"a"}}
+J
+`), 0o755)
+	c.cfg.LoginCommand = []string{script}
+
+	if c.Info().PasswordUpdatedAt != nil {
+		t.Fatal("PasswordUpdatedAt set before SetPassword")
+	}
+	for _, bad := range []string{"", "  ", "a\nb"} {
+		if err := c.SetPassword(bad); !errors.Is(err, ErrInvalidPassword) {
+			t.Errorf("SetPassword(%q) = %v", bad, err)
+		}
+	}
+	if err := c.SetPassword("n3w P@ss$"); err != nil {
+		t.Fatal(err)
+	}
+	if st, err := os.Stat(c.passwordPath()); err != nil || st.Mode().Perm() != 0o600 {
+		t.Fatalf("password file mode = %v, err %v", st.Mode().Perm(), err)
+	}
+	if c.Info().PasswordUpdatedAt == nil {
+		t.Error("PasswordUpdatedAt not set")
+	}
+	if err := c.ReAuth(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(got); string(b) != "n3w P@ss$" {
+		t.Errorf("script saw password %q", b)
+	}
+}
+
 func TestSearchPagesOldestFirst(t *testing.T) {
 	fake := splunktest.New()
 	lines := make([]string, 2500)

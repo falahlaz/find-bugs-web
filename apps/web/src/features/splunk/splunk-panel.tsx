@@ -3,12 +3,14 @@ import { Alert } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Row } from '@/components/ui/row'
 import { useTimezone } from '@/features/findbugs/queries'
 import { formatDateTime, formatDuration } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { useSplunkReauth, useSplunkStatus } from './queries'
-
+import { useState } from 'react'
+import { useSplunkReauth, useSplunkSetPassword, useSplunkStatus } from './queries'
 
 /** Session badge; shared with the summary on the Koneksi page. */
 export function SplunkBadge() {
@@ -91,6 +93,54 @@ export function SplunkPanel({ highlight = false }: { highlight?: boolean }) {
           )}
         </CardContent>
       </Card>
+
+      <PasswordCard updatedAt={s?.session.passwordUpdatedAt} tz={tz} />
     </div>
+  )
+}
+
+/** Password SSO direset tiap bulan; simpan yang baru di sini sebelum Re-auth. */
+function PasswordCard({ updatedAt, tz }: { updatedAt?: string; tz: string }) {
+  const save = useSplunkSetPassword()
+  const [password, setPassword] = useState('')
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Password SSO</CardTitle>
+        <CardDescription>
+          Password SSO direset tiap bulan. Kalau output login bilang "SSO asked for the password again", simpan password baru di sini lalu klik
+          Re-auth. Password tidak pernah ditampilkan lagi.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid gap-4">
+        <Row label="Sumber password">
+          {updatedAt ? <>Diganti lewat web {formatDateTime(updatedAt, tz)}</> : 'Bawaan server (.env)'}
+        </Row>
+        <form
+          className="flex flex-wrap items-end gap-3"
+          onSubmit={(e) => {
+            e.preventDefault()
+            save.mutate(password, { onSuccess: () => setPassword('') })
+          }}
+        >
+          <div className="grid min-w-60 flex-1 gap-2">
+            <Label htmlFor="splunk-sso-password">Password baru</Label>
+            <Input
+              id="splunk-sso-password"
+              type="password"
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </div>
+          <Button type="submit" disabled={!password.trim() || save.isPending}>
+            {save.isPending ? 'Menyimpan…' : 'Simpan password'}
+          </Button>
+        </form>
+        {save.error && <Alert tone="danger">{save.error.message}</Alert>}
+        {save.isSuccess && !password && <Alert tone="info">Password tersimpan. Klik Re-auth untuk login dengan password baru.</Alert>}
+      </CardContent>
+    </Card>
   )
 }
