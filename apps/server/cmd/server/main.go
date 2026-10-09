@@ -98,7 +98,7 @@ func serve() error {
 	}()
 
 	notifier := notify.NewTelegram(cfg.TelegramToken, cfg.TelegramChatID)
-	gp := vpn.NewManager(vpn.Config{Bin: cfg.GP.Bin, Portal: cfg.GP.Portal, Dir: cfg.GP.Dir, Browser: cfg.GP.Browser, ReachHosts: cfg.GP.ReachHosts})
+	gp := vpn.NewManager(vpn.Config{Bin: cfg.GP.Bin, Portal: cfg.GP.Portal, Dir: cfg.GP.Dir, Browser: cfg.GP.Browser, ReachHosts: cfg.GP.ReachHosts, RestartDaemons: cfg.GP.RestartDaemons})
 	sp := splunk.New(cfg.Splunk)
 	if err := sp.Load(); err != nil {
 		slog.Warn("splunk session not loaded; re-auth from the Splunk panel", "err", err)

@@ -1,0 +1,12 @@
+// Lets the Find Bugs Web user restart the GlobalProtect daemon without sudo
+// (the findbugs unit runs with NoNewPrivileges, so sudo is unavailable).
+// Install: sudo install -m 644 deploy/50-findbugs-gpd.rules /etc/polkit-1/rules.d/
+// Replace "falahlaz" with the user that runs the findbugs unit.
+polkit.addRule(function (action, subject) {
+    if (action.id == "org.freedesktop.systemd1.manage-units" &&
+        action.lookup("unit") == "gpd.service" &&
+        action.lookup("verb") == "restart" &&
+        subject.user == "falahlaz") {
+        return polkit.Result.YES;
+    }
+});

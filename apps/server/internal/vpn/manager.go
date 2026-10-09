@@ -37,6 +37,7 @@ const (
 	statusTimeout     = 5 * time.Second
 	launchURITimeout  = 30 * time.Second
 	disconnectTimeout = 15 * time.Second
+	restartTimeout    = 30 * time.Second
 	stopGrace         = 3 * time.Second
 	reachTimeout      = 3 * time.Second
 	maxURILen         = 8 * 1024
@@ -56,6 +57,9 @@ type Config struct {
 	Dir        string // ~/.gp-web
 	Browser    string
 	ReachHosts []string
+	// RestartDaemons restarts gpd (system unit, allowed via polkit) and gpa
+	// (user unit) after every disconnect, clearing a stuck daemon session.
+	RestartDaemons bool
 }
 
 func (c Config) loginURLPath() string   { return filepath.Join(c.Dir, "login-url") }
@@ -437,8 +441,34 @@ func (m *Manager) Disconnect() (CmdResult, error) {
 	m.state = StateIdle
 	m.connectedBy, m.connectedAt = "", time.Time{}
 	m.mu.Unlock()
-	m.record("disconnect", res, fmt.Sprintf("connect process stopped: %v", stopped))
+	extra := []string{fmt.Sprintf("connect process stopped: %v", stopped)}
+	if m.cfg.RestartDaemons {
+		extra = append(extra, restartDaemons()...)
+	}
+	m.record("disconnect", res, extra...)
 	return res, nil
+}
+
+// restartDaemons restarts gpd then gpa, which clears a daemon stuck on
+// "Retrieving configuration..." or one that still believes a session exists.
+// gpd is a system unit: the server runs with NoNewPrivileges, so this relies on
+// a polkit rule (deploy/50-findbugs-gpd.rules) rather than sudo.
+func restartDaemons() []string {
+	var out []string
+	for _, args := range [][]string{
+		{"restart", "gpd.service"},
+		{"--user", "restart", "gpa.service"},
+	} {
+		ctx, cancel := context.WithTimeout(context.Background(), restartTimeout)
+		b, err := exec.CommandContext(ctx, "systemctl", args...).CombinedOutput()
+		cancel()
+		line := "$ systemctl " + strings.Join(args, " ") + ": ok"
+		if err != nil {
+			line = fmt.Sprintf("$ systemctl %s: %v %s", strings.Join(args, " "), err, strings.TrimSpace(string(b)))
+		}
+		out = append(out, line)
+	}
+	return out
 }
 
 // Logs returns the tail of connect.log followed by the last command output.

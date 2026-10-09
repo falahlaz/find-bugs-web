@@ -176,7 +176,7 @@ export function VpnPanel() {
               variant="outline"
               disabled={disconnect.isPending}
               onClick={() => {
-                if (window.confirm('Putuskan VPN? Semua job akan menunggu sampai ada yang connect lagi.')) disconnect.mutate()
+                if (window.confirm('Putuskan VPN dan restart daemon GlobalProtect (gpd + gpa)? Semua job akan menunggu sampai ada yang connect lagi.')) disconnect.mutate()
               }}
             >
               Disconnect
@@ -190,8 +190,8 @@ export function VpnPanel() {
             <pre className="max-h-96 overflow-auto rounded-md bg-muted p-3 text-xs">{(logs.data ?? []).join('\n') || 'Belum ada log.'}</pre>
           )}
           <p className="text-xs text-muted-foreground">
-            Kalau semua Connect ditolak karena daemon nyangkut di "Retrieving configuration...", pemilik server perlu menjalankan{' '}
-            <code>sudo systemctl restart gpd && systemctl --user restart gpa</code>.
+            Disconnect juga me-restart daemon GlobalProtect (<code>gpd</code> + <code>gpa</code>). Kalau Connect gagal karena sesi
+            nyangkut ("already established" / "Retrieving configuration..."), klik Disconnect lalu Connect lagi.
           </p>
         </CardContent>
       </Card>
