@@ -73,6 +73,8 @@ type GP struct {
 	Dir        string
 	Browser    string
 	ReachHosts []string
+	// RestartDaemons restarts gpd/gpa after every disconnect.
+	RestartDaemons bool
 }
 
 // Splunk configures the Splunk REST client and SSO re-auth.
@@ -343,10 +345,11 @@ func Load(full bool) (Config, error) {
 
 	gpDir := l.str("GP_WEB_DIR", filepath.Join(home, ".gp-web"))
 	c.GP = GP{
-		Bin:        l.str("GP_BIN", "/usr/bin/globalprotect"),
-		Dir:        gpDir,
-		Browser:    l.str("BROWSER", filepath.Join(gpDir, "capture-url.sh")),
-		ReachHosts: splitList(l.str("GP_REACH_HOSTS", "")),
+		Bin:            l.str("GP_BIN", "/usr/bin/globalprotect"),
+		Dir:            gpDir,
+		Browser:        l.str("BROWSER", filepath.Join(gpDir, "capture-url.sh")),
+		ReachHosts:     splitList(l.str("GP_REACH_HOSTS", "")),
+		RestartDaemons: l.bool("GP_RESTART_DAEMONS", true),
 	}
 	c.Splunk = Splunk{
 		SessionPath:       l.str("SPLUNK_API_SESSION_PATH", "data/splunk_api_session.json"),

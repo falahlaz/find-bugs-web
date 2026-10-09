@@ -119,7 +119,13 @@ Semua langkah dijalankan sebagai user Linux pemilik sesi GlobalProtect (bukan ro
 
 ### Recovery manual
 
-Kalau daemon GlobalProtect nyangkut di "Retrieving configuration..." (semua Connect ditolak):
+Tombol **Disconnect** di Koneksi otomatis me-restart `gpd` + `gpa` (matikan dengan `GP_RESTART_DAEMONS=false`). Restart `gpd` butuh polkit rule karena unit jalan dengan `NoNewPrivileges` (sudo tidak bisa):
+
+```sh
+sudo install -m 644 deploy/50-findbugs-gpd.rules /etc/polkit-1/rules.d/
+```
+
+Manual, kalau daemon GlobalProtect nyangkut di "Retrieving configuration..." (semua Connect ditolak):
 
 ```sh
 sudo systemctl restart gpd && systemctl --user restart gpa
