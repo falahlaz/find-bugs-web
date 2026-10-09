@@ -18,3 +18,11 @@ export function useSplunkReauth() {
     onSettled: () => void qc.invalidateQueries({ queryKey: ['system-status'] }),
   })
 }
+
+export function useSplunkSetPassword() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (password: string) => unwrap(await api.PUT('/api/splunk/password', { body: { password } })),
+    onSuccess: (data) => qc.setQueryData(['splunk', 'status'], data),
+  })
+}

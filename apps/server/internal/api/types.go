@@ -114,6 +114,11 @@ type SplunkSummary struct {
 	Session   splunk.SessionInfo `json:"session"`
 }
 
+// SplunkPasswordRequest sets the SSO password for re-auth.
+type SplunkPasswordRequest struct {
+	Password string `json:"password"`
+}
+
 // QueueSummary counts active jobs.
 type QueueSummary struct {
 	Active int `json:"active"`

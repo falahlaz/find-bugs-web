@@ -1685,6 +1685,11 @@
             },
             "type": "array"
           },
+          "passwordUpdatedAt": {
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
           "reauthRunning": {
             "type": "boolean"
           },
@@ -1746,6 +1751,17 @@
         "required": [
           "checkedAt",
           "status"
+        ],
+        "type": "object"
+      },
+      "SplunkPasswordRequest": {
+        "properties": {
+          "password": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "password"
         ],
         "type": "object"
       },
@@ -4136,6 +4152,53 @@
         "x-roles": [
           "engineer"
         ]
+      }
+    },
+    "/api/splunk/password": {
+      "put": {
+        "operationId": "splunkSetPassword",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SplunkPasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SplunkSummary"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Set the SSO password used by re-auth (write-only)",
+        "tags": [
+          "splunk"
+        ],
+        "x-menu": "koneksi"
       }
     },
     "/api/splunk/reauth": {

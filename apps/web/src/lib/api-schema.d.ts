@@ -483,6 +483,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/splunk/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set the SSO password used by re-auth (write-only) */
+        put: operations["splunkSetPassword"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/splunk/reauth": {
         parameters: {
             query?: never;
@@ -1244,6 +1261,8 @@ export interface components {
             lastReauthOk?: boolean | null;
             loaded: boolean;
             missingCookies?: string[];
+            /** Format: date-time */
+            passwordUpdatedAt?: string | null;
             reauthRunning: boolean;
             /** Format: date-time */
             savedAt?: string | null;
@@ -1260,6 +1279,9 @@ export interface components {
             sevenDay?: components["schemas"]["Window"] | null;
             /** @description allowed, allowed_warning or rejected */
             status: string;
+        };
+        SplunkPasswordRequest: {
+            password: string;
         };
         SplunkSummary: {
             /** Format: date-time */
@@ -2469,6 +2491,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RepoSessionResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    splunkSetPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SplunkPasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SplunkSummary"];
                 };
             };
             /** @description Error */
