@@ -77,7 +77,7 @@ function PaletteDialog() {
         { key: 'users', label: 'Kelola user', hint: 'Engineer', icon: Users, run: go('/users') },
         { key: 'audit', label: 'Audit log', hint: 'Engineer', icon: ScrollText, run: go('/audit') },
         { key: 'mrs', label: 'MR Triage', hint: 'Engineer', icon: GitMerge, run: go('/mrs') },
-        { key: 'usage', label: 'Pemakaian Claude', hint: 'Engineer', icon: Gauge, run: go('/usage') },
+        { key: 'usage', label: 'Pemakaian AI', hint: 'Engineer', icon: Gauge, run: go('/usage') },
       )
     }
     const q = query.trim().toLowerCase()

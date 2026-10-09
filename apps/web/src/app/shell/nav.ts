@@ -13,7 +13,7 @@ export const engineerNav: NavItem[] = [
   { to: '/mrs', label: 'MR Triage', short: 'MR', icon: GitMerge },
   { to: '/users', label: 'User', short: 'User', icon: Users },
   { to: '/audit', label: 'Audit log', short: 'Audit', icon: ScrollText },
-  { to: '/usage', label: 'Pemakaian Claude', short: 'Usage', icon: Gauge },
+  { to: '/usage', label: 'Pemakaian AI', short: 'Usage', icon: Gauge },
 ]
 
 export function initials(name: string) {

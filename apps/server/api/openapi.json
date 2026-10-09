@@ -1,6 +1,55 @@
 {
   "components": {
     "schemas": {
+      "AgyPool": {
+        "properties": {
+          "models": {
+            "description": "Display names of the selectable models in the pool",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "name": {
+            "description": "Model families in the pool, e.g. Gemini or Claude \u0026 GPT-OSS",
+            "type": "string"
+          },
+          "percent": {
+            "description": "Percent of the pool used, 0-100",
+            "type": "number"
+          },
+          "resetsAt": {
+            "format": "date-time",
+            "type": "string"
+          }
+        },
+        "required": [
+          "models",
+          "name",
+          "percent",
+          "resetsAt"
+        ],
+        "type": "object"
+      },
+      "AgySnapshot": {
+        "properties": {
+          "checkedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "pools": {
+            "items": {
+              "$ref": "#/components/schemas/AgyPool"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "checkedAt",
+          "pools"
+        ],
+        "type": "object"
+      },
       "AuditEntry": {
         "properties": {
           "action": {
@@ -3759,6 +3808,55 @@
           }
         ],
         "summary": "Claude subscription usage: 5-hour and weekly windows (refresh=1 re-probes)",
+        "tags": [
+          "system"
+        ],
+        "x-roles": [
+          "engineer"
+        ]
+      }
+    },
+    "/api/usage/agy": {
+      "get": {
+        "operationId": "agyUsage",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgySnapshot"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "default": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorBody"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        },
+        "security": [
+          {
+            "session": []
+          }
+        ],
+        "summary": "Antigravity (agy) quota per model pool (refresh=1 re-probes)",
         "tags": [
           "system"
         ],

@@ -68,9 +68,11 @@ type API struct {
 	// MR Triage page.
 	MRs *mrtriage.Service
 	// Usage reports the Claude subscription limits; nil hides the page.
-	Usage   *usage.Prober
-	Web     fs.FS // React build (index.html + assets); nil in tests
-	Version string
+	Usage *usage.Prober
+	// AgyUsage reports the Antigravity quota; nil hides that section.
+	AgyUsage *usage.AgyProber
+	Web      fs.FS // React build (index.html + assets); nil in tests
+	Version  string
 	// BaseCtx outlives requests (for background re-auth).
 	BaseCtx context.Context
 	// LogDir holds the per-job Splunk log files (job-<id>[.raw].log).

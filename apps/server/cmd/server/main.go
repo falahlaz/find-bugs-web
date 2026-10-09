@@ -191,6 +191,9 @@ func serve() error {
 	if cfg.Analyzer == "claude" {
 		a.Usage = &usage.Prober{Bin: cfg.Claude.Bin, Timeout: time.Minute, MaxAge: 5 * time.Minute, MinGap: 30 * time.Second}
 	}
+	if fi, err := os.Stat(cfg.Agy.Bin); err == nil && !fi.IsDir() {
+		a.AgyUsage = &usage.AgyProber{Bin: cfg.Agy.Bin, StateDir: cfg.Agy.StateDir, Timeout: time.Minute, MaxAge: 5 * time.Minute, MinGap: 30 * time.Second}
+	}
 	if g.ReposDir != "" {
 		a.Repos = rm
 		a.RC = rcsession.New(rcsession.Config{
