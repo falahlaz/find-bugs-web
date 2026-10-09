@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/platform/store"
 )
@@ -98,7 +99,9 @@ func TestEngineerNotes(t *testing.T) {
 		t.Fatalf("versions = %d %+v", code, vs)
 	}
 	var list NoteListResponse
-	if eng.do("GET", "/api/notes", nil, &list); len(list.Notes) != 1 || list.Notes[0].ComponentKey != "fake-service" || list.Notes[0].ErrorTypeKey != "fakeerror" {
+	// Both jobs show the note.
+	if eng.do("GET", "/api/notes", nil, &list); len(list.Notes) != 1 || list.Notes[0].ComponentKey != "fake-service" || list.Notes[0].ErrorTypeKey != "fakeerror" ||
+		list.Notes[0].MatchedJobs != 2 || list.Notes[0].LastMatchedAt == nil {
 		t.Fatalf("list = %+v", list)
 	}
 
@@ -113,10 +116,33 @@ func TestEngineerNotes(t *testing.T) {
 	if after.Result.EngineerNote != nil {
 		t.Errorf("archived note still shown: %+v", after.Result.EngineerNote)
 	}
-	if eng.do("GET", "/api/notes?state=archived", nil, &list); len(list.Notes) != 1 || list.Notes[0].State != store.NoteArchived {
+	if eng.do("GET", "/api/notes?state=archived", nil, &list); len(list.Notes) != 1 || list.Notes[0].State != store.NoteArchived || list.Notes[0].MatchedJobs != 0 {
 		t.Errorf("archived list = %+v", list)
 	}
 	if code := eng.do("GET", "/api/notes?state=x", nil, nil); code != 400 {
 		t.Errorf("bad state = %d", code)
+	}
+}
+
+func TestNoteMatches(t *testing.T) {
+	const url = "https://h/preprod-web/a/submit"
+	list := []store.EngineerNote{
+		{ID: 1, ComponentKey: "/a/submit", ErrorTypeKey: "sys-uxp-0021", State: store.NoteActive},
+		{ID: 2, ComponentKey: "/a/submit", ErrorTypeKey: store.AnyErrorType, State: store.NoteActive},
+		{ID: 3, ComponentKey: "/a/submit", ErrorTypeKey: "503", State: store.NoteArchived},
+	}
+	t1, t2 := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 10, 2, 0, 0, 0, 0, time.UTC)
+	errs := []store.DiagnosedError{
+		{JobID: 1, FailedComponent: url, ErrorType: "SYS-UXP-0021", CreatedAt: t1},
+		{JobID: 2, FailedComponent: "https://x/dev-web/a/submit", ErrorType: "SYS-UXP-0021: Internal Application Error", CreatedAt: t2},
+		{JobID: 3, FailedComponent: url, ErrorType: "503", CreatedAt: t1}, // the archived note's error: the wide note shows
+		{JobID: 4, FailedComponent: "/other", ErrorType: "503", CreatedAt: t2},
+	}
+	got := noteMatches(list, errs)
+	if got[0].MatchedJobs != 2 || !got[0].LastMatchedAt.Equal(t2) {
+		t.Errorf("exact note = %d %v", got[0].MatchedJobs, got[0].LastMatchedAt)
+	}
+	if got[1].MatchedJobs != 1 || got[2].MatchedJobs != 0 || got[2].LastMatchedAt != nil {
+		t.Errorf("wide %d, archived %d", got[1].MatchedJobs, got[2].MatchedJobs)
 	}
 }

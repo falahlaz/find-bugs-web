@@ -459,9 +459,16 @@ type NoteSaveRequest struct {
 	AllErrorTypes    bool   `json:"allErrorTypes,omitempty"`
 }
 
+// NoteListItem is an engineer note with the diagnosed jobs it shows on.
+type NoteListItem struct {
+	store.EngineerNote
+	MatchedJobs   int        `json:"matchedJobs" doc:"Diagnosed jobs the active note shows on, within the diagnosis retention"`
+	LastMatchedAt *time.Time `json:"lastMatchedAt,omitempty" doc:"When the newest of those jobs was diagnosed"`
+}
+
 // NoteListResponse lists engineer notes.
 type NoteListResponse struct {
-	Notes []store.EngineerNote `json:"notes"`
+	Notes []NoteListItem `json:"notes"`
 }
 
 // NoteVersionsResponse lists a note's revisions, newest first.

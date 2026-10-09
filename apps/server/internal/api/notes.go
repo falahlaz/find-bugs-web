@@ -192,7 +192,46 @@ func (a *API) listNotes(w http.ResponseWriter, r *http.Request) {
 		httpx.Internal(w, r, err)
 		return
 	}
-	httpx.JSON(w, http.StatusOK, NoteListResponse{Notes: list})
+	errs, err := a.Store.ListDiagnosedErrors(r.Context())
+	if err != nil {
+		httpx.Internal(w, r, err)
+		return
+	}
+	httpx.JSON(w, http.StatusOK, NoteListResponse{Notes: noteMatches(list, errs)})
+}
+
+// noteMatches counts the diagnosed jobs each active note shows on, matching
+// as the job page does: the exact error type first, then the component's
+// note for every error type.
+func noteMatches(list []store.EngineerNote, errs []store.DiagnosedError) []NoteListItem {
+	type key struct{ component, errorType string }
+	items := make([]NoteListItem, len(list))
+	active := map[key]*NoteListItem{}
+	for i, n := range list {
+		items[i].EngineerNote = n
+		if n.State == store.NoteActive {
+			active[key{n.ComponentKey, n.ErrorTypeKey}] = &items[i]
+		}
+	}
+	for _, d := range errs {
+		ck, ek, ok := notes.Keys(d.FailedComponent, d.ErrorType, false)
+		if !ok {
+			continue
+		}
+		it := active[key{ck, ek}]
+		if it == nil {
+			it = active[key{ck, store.AnyErrorType}]
+		}
+		if it == nil {
+			continue
+		}
+		it.MatchedJobs++
+		if it.LastMatchedAt == nil || d.CreatedAt.After(*it.LastMatchedAt) {
+			at := d.CreatedAt
+			it.LastMatchedAt = &at
+		}
+	}
+	return items
 }
 
 func (a *API) archiveNote(w http.ResponseWriter, r *http.Request) {

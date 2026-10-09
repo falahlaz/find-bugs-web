@@ -216,3 +216,32 @@ func (s *Store) ListNoteVersions(ctx context.Context, noteID int64) ([]NoteVersi
 	}
 	return out, rows.Err()
 }
+
+// DiagnosedError is the error a job's diagnosis names, for matching notes.
+type DiagnosedError struct {
+	JobID                      int64
+	FailedComponent, ErrorType string
+	CreatedAt                  time.Time
+}
+
+// ListDiagnosedErrors returns the errors of every successful diagnosis that
+// names a failed component.
+func (s *Store) ListDiagnosedErrors(ctx context.Context) ([]DiagnosedError, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT job_id, failed_component, COALESCE(error_type, ''), created_at FROM investigations
+		WHERE NOT llm_failed AND COALESCE(failed_component, '') != ''`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []DiagnosedError
+	for rows.Next() {
+		var d DiagnosedError
+		var at string
+		if err := rows.Scan(&d.JobID, &d.FailedComponent, &d.ErrorType, &at); err != nil {
+			return nil, err
+		}
+		d.CreatedAt = parseTS(at)
+		out = append(out, d)
+	}
+	return out, rows.Err()
+}

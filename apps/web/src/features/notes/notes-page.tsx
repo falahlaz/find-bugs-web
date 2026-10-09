@@ -50,6 +50,11 @@ function NoteRow({ note }: { note: EngineerNote }) {
               <span>
                 {note.updatedBy || note.createdBy} · {formatDateTime(note.updatedAt, tz)}
               </span>
+              {active && (
+                <span title="Job dengan diagnosis yang masih tersimpan">
+                  {note.matchedJobs > 0 ? `muncul di ${note.matchedJobs} job, terakhir ${formatDateTime(note.lastMatchedAt, tz)}` : 'belum muncul di job mana pun'}
+                </span>
+              )}
               {note.sourceJobId && (
                 <Link to={`/jobs/${note.sourceJobId}`} className="text-primary hover:underline">
                   job #{note.sourceJobId}

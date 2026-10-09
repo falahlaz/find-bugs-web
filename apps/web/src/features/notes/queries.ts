@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type Schemas, unwrap } from '@/lib/api'
 
-export type EngineerNote = Schemas['EngineerNote']
+export type EngineerNote = Schemas['NoteListItem']
 export type NoteView = Schemas['NoteView']
 export type NoteReview = Schemas['NoteReviewResponse']
 export type NoteCheck = Schemas['NoteCheckRequest']

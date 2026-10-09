@@ -335,91 +335,6 @@
         ],
         "type": "object"
       },
-      "EngineerNote": {
-        "properties": {
-          "aiVerdict": {
-            "enum": [
-              "ok",
-              "overridden",
-              "unchecked"
-            ],
-            "type": "string"
-          },
-          "cause": {
-            "type": "string"
-          },
-          "causeText": {
-            "type": "string"
-          },
-          "component": {
-            "type": "string"
-          },
-          "componentKey": {
-            "type": "string"
-          },
-          "createdAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "createdBy": {
-            "type": "string"
-          },
-          "errorSource": {
-            "type": "string"
-          },
-          "errorType": {
-            "type": "string"
-          },
-          "errorTypeKey": {
-            "type": "string"
-          },
-          "id": {
-            "format": "int64",
-            "type": "integer"
-          },
-          "qaRecommendation": {
-            "type": "string"
-          },
-          "qaText": {
-            "type": "string"
-          },
-          "sourceJobId": {
-            "format": "int64",
-            "nullable": true,
-            "type": "integer"
-          },
-          "state": {
-            "enum": [
-              "active",
-              "archived"
-            ],
-            "type": "string"
-          },
-          "updatedAt": {
-            "format": "date-time",
-            "type": "string"
-          },
-          "updatedBy": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "aiVerdict",
-          "cause",
-          "causeText",
-          "component",
-          "componentKey",
-          "createdAt",
-          "errorType",
-          "errorTypeKey",
-          "id",
-          "qaRecommendation",
-          "qaText",
-          "state",
-          "updatedAt"
-        ],
-        "type": "object"
-      },
       "EnvironmentsResponse": {
         "properties": {
           "defaultTimeRange": {
@@ -1051,11 +966,108 @@
         ],
         "type": "object"
       },
+      "NoteListItem": {
+        "properties": {
+          "aiVerdict": {
+            "enum": [
+              "ok",
+              "overridden",
+              "unchecked"
+            ],
+            "type": "string"
+          },
+          "cause": {
+            "type": "string"
+          },
+          "causeText": {
+            "type": "string"
+          },
+          "component": {
+            "type": "string"
+          },
+          "componentKey": {
+            "type": "string"
+          },
+          "createdAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "createdBy": {
+            "type": "string"
+          },
+          "errorSource": {
+            "type": "string"
+          },
+          "errorType": {
+            "type": "string"
+          },
+          "errorTypeKey": {
+            "type": "string"
+          },
+          "id": {
+            "format": "int64",
+            "type": "integer"
+          },
+          "lastMatchedAt": {
+            "description": "When the newest of those jobs was diagnosed",
+            "format": "date-time",
+            "nullable": true,
+            "type": "string"
+          },
+          "matchedJobs": {
+            "description": "Diagnosed jobs the active note shows on, within the diagnosis retention",
+            "format": "int64",
+            "type": "integer"
+          },
+          "qaRecommendation": {
+            "type": "string"
+          },
+          "qaText": {
+            "type": "string"
+          },
+          "sourceJobId": {
+            "format": "int64",
+            "nullable": true,
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "active",
+              "archived"
+            ],
+            "type": "string"
+          },
+          "updatedAt": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "updatedBy": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "aiVerdict",
+          "cause",
+          "causeText",
+          "component",
+          "componentKey",
+          "createdAt",
+          "errorType",
+          "errorTypeKey",
+          "id",
+          "matchedJobs",
+          "qaRecommendation",
+          "qaText",
+          "state",
+          "updatedAt"
+        ],
+        "type": "object"
+      },
       "NoteListResponse": {
         "properties": {
           "notes": {
             "items": {
-              "$ref": "#/components/schemas/EngineerNote"
+              "$ref": "#/components/schemas/NoteListItem"
             },
             "type": "array"
           }
