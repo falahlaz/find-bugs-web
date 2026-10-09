@@ -328,6 +328,75 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Engineer notes */
+        get: operations["listNotes"];
+        put?: never;
+        /** Create or update the engineer note for a job's error */
+        post: operations["saveNote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notes/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** AI review of an engineer note before saving */
+        post: operations["checkNote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notes/{id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive an engineer note */
+        post: operations["archiveNote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notes/{id}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Revisions of an engineer note */
+        get: operations["noteVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reports": {
         parameters: {
             query?: never;
@@ -787,6 +856,31 @@ export interface components {
             role: "qa" | "engineer";
             username: string;
         };
+        EngineerNote: {
+            /** @enum {string} */
+            aiVerdict: "ok" | "overridden" | "unchecked";
+            cause: string;
+            causeText: string;
+            component: string;
+            componentKey: string;
+            /** Format: date-time */
+            createdAt: string;
+            createdBy?: string;
+            errorSource?: string;
+            errorType: string;
+            errorTypeKey: string;
+            /** Format: int64 */
+            id: number;
+            qaRecommendation: string;
+            qaText: string;
+            /** Format: int64 */
+            sourceJobId?: number | null;
+            /** @enum {string} */
+            state: "active" | "archived";
+            /** Format: date-time */
+            updatedAt: string;
+            updatedBy?: string;
+        };
         EnvironmentsResponse: {
             defaultTimeRange: string;
             environments: string[];
@@ -962,6 +1056,71 @@ export interface components {
             updatedAt: string;
             webUrl: string;
         };
+        NoteCheckRequest: {
+            cause: string;
+            /** Format: int64 */
+            jobId?: number;
+            /** Format: int64 */
+            noteId?: number;
+            qaRecommendation: string;
+        };
+        NoteListResponse: {
+            notes: components["schemas"]["EngineerNote"][];
+        };
+        NoteReviewResponse: {
+            causeText: string;
+            model?: string;
+            qaText: string;
+            questions: string[];
+            suggestions: string[];
+            /** @enum {string} */
+            verdict: "ok" | "needs_revision";
+        };
+        NoteSaveRequest: {
+            /** @enum {string} */
+            aiVerdict: "ok" | "overridden" | "unchecked";
+            allErrorTypes?: boolean;
+            cause: string;
+            causeText?: string;
+            /** Format: int64 */
+            jobId?: number;
+            /** Format: int64 */
+            noteId?: number;
+            qaRecommendation: string;
+            qaText?: string;
+        };
+        NoteVersion: {
+            aiVerdict: string;
+            cause: string;
+            causeText: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: int64 */
+            id: number;
+            qaRecommendation: string;
+            qaText: string;
+            username?: string;
+        };
+        NoteVersionsResponse: {
+            versions: components["schemas"]["NoteVersion"][];
+        };
+        NoteView: {
+            /** @enum {string} */
+            aiVerdict: "ok" | "overridden" | "unchecked";
+            /** @description The note covers every error type of the component */
+            allErrorTypes: boolean;
+            cause?: string;
+            causeText: string;
+            component: string;
+            errorType: string;
+            /** Format: int64 */
+            id: number;
+            qaRecommendation?: string;
+            qaText: string;
+            /** Format: date-time */
+            updatedAt: string;
+            updatedBy?: string;
+        };
         OKResponse: {
             ok: boolean;
         };
@@ -1058,6 +1217,7 @@ export interface components {
         };
         Result: {
             codeTrace?: components["schemas"]["CodeTrace"] | null;
+            engineerNote?: components["schemas"]["NoteView"] | null;
             /** @enum {string} */
             errorSource?: "esb" | "tibco" | "internal" | "unknown";
             errorType?: string;
@@ -1951,6 +2111,174 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MRMergeResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    listNotes: {
+        parameters: {
+            query?: {
+                state?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteListResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    saveNote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteSaveRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteView"];
+                };
+            };
+            /** @description Created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteView"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    checkNote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteCheckRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteReviewResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    archiveNote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OKResponse"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorBody"];
+                };
+            };
+        };
+    };
+    noteVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteVersionsResponse"];
                 };
             };
             /** @description Error */

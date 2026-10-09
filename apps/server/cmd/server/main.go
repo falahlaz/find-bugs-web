@@ -185,6 +185,9 @@ func serve() error {
 	if chat != nil {
 		a.Trace = chat
 	}
+	if nr, ok := an.(analyzer.NoteReviewer); ok {
+		a.Notes = nr
+	}
 	if gl != nil {
 		a.MRs = &mrtriage.Service{GL: gl, Author: cfg.MRTriageAuthor}
 	}

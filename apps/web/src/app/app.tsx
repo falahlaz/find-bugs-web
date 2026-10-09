@@ -5,6 +5,7 @@ import { adminRoutes } from '@/features/admin/routes'
 import { connectionRoutes } from '@/features/connection/routes'
 import { findbugsRoutes } from '@/features/findbugs/routes'
 import { mrsRoutes } from '@/features/mrs/routes'
+import { notesRoutes } from '@/features/notes/routes'
 import { reportsRoutes } from '@/features/reports/routes'
 import { reposRoutes } from '@/features/repos/routes'
 import { toolsRoutes } from '@/features/tools/routes'
@@ -36,6 +37,7 @@ const router = createBrowserRouter([
       ...reposRoutes,
       ...mrsRoutes,
       ...reportsRoutes,
+      ...notesRoutes,
       ...toolsRoutes,
       { path: '*', element: <NotFound /> },
     ],

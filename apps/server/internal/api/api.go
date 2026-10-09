@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/analyzer"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/jobs"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/mrtriage"
 	"github.com/falahlaz/find-bugs-web/apps/server/internal/findbugs/rcsession"
@@ -71,8 +72,11 @@ type API struct {
 	Usage *usage.Prober
 	// AgyUsage reports the Antigravity quota; nil hides that section.
 	AgyUsage *usage.AgyProber
-	Web      fs.FS // React build (index.html + assets); nil in tests
-	Version  string
+	// Notes reviews engineer notes before they are saved; nil saves them
+	// unchecked.
+	Notes   analyzer.NoteReviewer
+	Web     fs.FS // React build (index.html + assets); nil in tests
+	Version string
 	// BaseCtx outlives requests (for background re-auth).
 	BaseCtx context.Context
 	// LogDir holds the per-job Splunk log files (job-<id>[.raw].log).
@@ -177,6 +181,7 @@ func (a *API) registerRoutes() {
 	a.registerToolRoutes()
 	a.registerUsageRoutes()
 	a.registerMRRoutes()
+	a.registerNoteRoutes()
 
 	a.add(route{method: "POST", path: "/api/vpn/connect", menu: store.MenuKoneksi, summary: "Start GlobalProtect connect", tag: "vpn", opID: "vpnConnect",
 		resps: map[int]any{202: VPNStateResponse{}}, h: a.vpnConnect})
@@ -510,6 +515,7 @@ func (a *API) jobView(ctx context.Context, u store.User, j store.Job) (JobView, 
 		return v, err
 	}
 	v.Result = shapeResult(u, j, inv)
+	v.Result.EngineerNote = a.matchNote(ctx, u, inv)
 	return v, nil
 }
 

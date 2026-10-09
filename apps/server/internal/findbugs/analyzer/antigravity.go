@@ -101,11 +101,13 @@ type Antigravity struct {
 }
 
 // Args returns the CLI arguments (exposed for tests).
-func (a Antigravity) Args(prompt string) []string {
+func (a Antigravity) Args(prompt string) []string { return a.args(prompt, diagnosisSchema) }
+
+func (a Antigravity) args(prompt, schema string) []string {
 	return []string{
 		"--model", a.Model,
 		"--output-format", "json",
-		"--json-schema", diagnosisSchema,
+		"--json-schema", schema,
 		"--sandbox",
 		"--disable-slash-commands",
 		"--print", prompt,
@@ -121,13 +123,28 @@ func (a Antigravity) Analyze(ctx context.Context, transactionID, logPath string)
 		return Diagnosis{}, err
 	}
 	defer os.RemoveAll(dir)
-	home, err := agyHome(a.StateDir)
+	result, err := a.exec(ctx, dir, a.Args(AntigravityPrompt(transactionID, size)))
 	if err != nil {
 		return Diagnosis{}, err
 	}
+	d, err := Parse(result)
+	if err != nil {
+		return Diagnosis{}, err
+	}
+	d.Model = a.Model
+	return d, nil
+}
+
+// exec runs agy with args in dir under a throwaway HOME and returns the
+// answer: the structured output when there is one, else the response text.
+func (a Antigravity) exec(ctx context.Context, dir string, args []string) (string, error) {
+	home, err := agyHome(a.StateDir)
+	if err != nil {
+		return "", err
+	}
 	defer os.RemoveAll(home)
 
-	cmd := exec.CommandContext(ctx, a.Bin, a.Args(AntigravityPrompt(transactionID, size))...)
+	cmd := exec.CommandContext(ctx, a.Bin, args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "HOME="+home)
 	// Own process group so a timeout kills agy and anything it spawned.
@@ -138,7 +155,7 @@ func (a Antigravity) Analyze(ctx context.Context, transactionID, logPath string)
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	runErr := cmd.Run()
 	if runErr != nil && ctx.Err() == context.DeadlineExceeded {
-		return Diagnosis{}, fmt.Errorf("agy timed out after %s", a.Timeout)
+		return "", fmt.Errorf("agy timed out after %s", a.Timeout)
 	}
 	var out struct {
 		Status           string          `json:"status"`
@@ -148,26 +165,21 @@ func (a Antigravity) Analyze(ctx context.Context, transactionID, logPath string)
 	}
 	if err := json.Unmarshal(stdout.Bytes(), &out); err != nil {
 		if runErr != nil {
-			return Diagnosis{}, fmt.Errorf("agy failed: %w: %s", runErr, tail(stderr.String()+stdout.String()))
+			return "", fmt.Errorf("agy failed: %w: %s", runErr, tail(stderr.String()+stdout.String()))
 		}
-		return Diagnosis{}, fmt.Errorf("agy output is not JSON: %s", tail(stdout.String()))
+		return "", fmt.Errorf("agy output is not JSON: %s", tail(stdout.String()))
 	}
 	if out.Status != "SUCCESS" {
-		return Diagnosis{}, fmt.Errorf("agy returned %s: %s", out.Status, tail(out.Error+" "+stderr.String()))
+		return "", fmt.Errorf("agy returned %s: %s", out.Status, tail(out.Error+" "+stderr.String()))
 	}
 	if runErr != nil {
-		return Diagnosis{}, fmt.Errorf("agy failed: %w: %s", runErr, tail(stderr.String()))
+		return "", fmt.Errorf("agy failed: %w: %s", runErr, tail(stderr.String()))
 	}
 	result := out.Response
 	if len(out.StructuredOutput) > 0 && string(out.StructuredOutput) != "null" {
 		result = string(out.StructuredOutput)
 	}
-	d, err := Parse(result)
-	if err != nil {
-		return Diagnosis{}, err
-	}
-	d.Model = a.Model
-	return d, nil
+	return result, nil
 }
 
 // Fallback analyzes with Primary and, when it fails, with Secondary, so a
