@@ -1,4 +1,11 @@
-import { ExternalLink, GitBranch, Loader2, Trash2 } from "lucide-react";
+import {
+  ExternalLink,
+  GitBranch,
+  Loader2,
+  Search,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useState, type FormEvent } from "react";
 import antigravityLogo from "@/assets/antigravity.svg";
 import claudeLogo from "@/assets/claude.svg";
@@ -282,9 +289,20 @@ function RepoItem({
   );
 }
 
+function matches(repo: Repo, terms: string[]) {
+  const hay = [repo.project, repo.branch, repo.commit, repo.subject]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  return terms.every((t) => hay.includes(t));
+}
+
 export function ReposPage() {
   const repos = useRepos();
   const data = repos.data;
+  const [query, setQuery] = useState("");
+  const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const shown = data?.repos.filter((r) => matches(r, terms));
 
   return (
     <div className="grid gap-4">
@@ -306,8 +324,34 @@ export function ReposPage() {
         <CloneStatus key={c.project} c={c} />
       ))}
       <Card>
-        <CardHeader>
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-3">
           <CardTitle>Semua repo</CardTitle>
+          {data && data.repos.length > 0 && (
+            <label className="flex w-full items-center gap-2 rounded-md border bg-card px-2.5 text-muted-foreground focus-within:border-ring sm:w-72">
+              <Search className="size-4 shrink-0" aria-hidden />
+              <span className="sr-only">Cari repo</span>
+              <input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => e.key === "Escape" && setQuery("")}
+                placeholder="Cari repo, branch, commit"
+                autoComplete="off"
+                spellCheck={false}
+                className="min-w-0 flex-1 bg-transparent py-1.5 text-sm text-foreground outline-none [&::-webkit-search-cancel-button]:hidden"
+              />
+              {query && (
+                <button
+                  type="button"
+                  aria-label="Hapus pencarian"
+                  className="hover:text-foreground"
+                  onClick={() => setQuery("")}
+                >
+                  <X className="size-4" aria-hidden />
+                </button>
+              )}
+            </label>
+          )}
         </CardHeader>
         <CardContent>
           {repos.error && <Alert tone="danger">{repos.error.message}</Alert>}
@@ -320,8 +364,13 @@ export function ReposPage() {
           {data && data.repos.length === 0 && (
             <p className="text-sm text-muted-foreground">Belum ada repo.</p>
           )}
+          {data && data.repos.length > 0 && shown?.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              Tidak ada repo yang cocok dengan “{query.trim()}”.
+            </p>
+          )}
           <ul>
-            {data?.repos.map((r) => (
+            {shown?.map((r) => (
               <RepoItem
                 key={r.project}
                 repo={r}
