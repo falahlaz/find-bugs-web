@@ -105,12 +105,13 @@ func serve() error {
 	}
 	mon := watchdog.New(gp, sp, notifier, cfg.PublicURL)
 
-	var an analyzer.Analyzer = analyzer.ClaudeCode{Bin: cfg.Claude.Bin, Model: cfg.Claude.Model, Timeout: cfg.Claude.Timeout}
+	claude := analyzer.ClaudeCode{Bin: cfg.Claude.Bin, Model: cfg.Claude.Model, Timeout: cfg.Claude.Timeout}
+	var an analyzer.Analyzer = claude
 	if cfg.LogAnalyzer == "antigravity" {
 		agy := analyzer.Antigravity{Bin: cfg.Agy.Bin, Model: cfg.Agy.Model, Timeout: cfg.Agy.Timeout, StateDir: cfg.Agy.StateDir}
 		an = agy
 		if cfg.Agy.Fallback {
-			an = analyzer.Fallback{Primary: agy, Secondary: an, OnFallback: func(err error) {
+			an = analyzer.Fallback{Primary: agy, Secondary: claude, OnFallback: func(err error) {
 				slog.Warn("antigravity log analysis failed; falling back to claude", "err", err)
 			}}
 		}
